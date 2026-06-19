@@ -4,8 +4,8 @@
 Claude Code 命令守卫 (PreToolUse Hook)
 ========================================
 作用:每条 Bash 命令执行前判定危险程度
-  - 核武器级(不可逆毁灭) → 响铃 + 直接拒绝(deny)
-  - 危险(可能合理)        → 响铃 + 弹确认(ask),由你当场决定
+  - 核武器级(不可逆毁灭) → 响铃(两声,急促) + 直接拒绝(deny)
+  - 危险(可能合理)        → 响铃(一声) + 弹确认(ask),由你当场决定
   - 命中你的 deny 名单      → 交回(exit 0),让 settings 里的静态 deny 按原语义直接拒绝
   - 安全(其余一切)        → 自动放行(allow),连确认框都不弹
 
@@ -26,8 +26,9 @@ import subprocess
 # 可配置区
 # ============================================================
 
-# 提示音文件(换成 Sosumi/Funk/Glass/Hero 等: ls /System/Library/Sounds/)
-SOUND_FILE = "/System/Library/Sounds/Basso.aiff"
+# 提示音(可换成 /System/Library/Sounds/ 下任意: Sosumi/Funk/Glass/Hero/Ping...)
+SOUND_WARN = "/System/Library/Sounds/Basso.aiff"    # 危险(ask):响一声
+SOUND_BLOCK = "/System/Library/Sounds/Sosumi.aiff"  # 毁灭级(deny):急促两声
 
 # WARN:危险但可能合理 → 响铃 + 弹确认(ask)。 (正则, 中文说明)
 WARN_PATTERNS = [
@@ -53,6 +54,16 @@ WARN_PATTERNS = [
     (r"\bgit\s+push\b[^\n]*(--force\b|--force-with-lease\b|\s-f\b)", "git 强制推送"),
     (r"\bgit\s+reset\b[^\n]*--hard\b",                         "git reset --hard 丢弃改动"),
     (r"\bgit\s+clean\b[^\n]*\s-\w*f",                          "git clean -f 删未跟踪文件"),
+    # —— 以下为贴合常用开发场景补充的危险命令 ——
+    (r"\bgit\s+restore\b",                                    "git restore 丢弃工作区改动"),
+    (r"\bgit\s+checkout\b[^\n]*\s--(\s|$)",                    "git checkout -- 丢弃文件改动"),
+    (r"\bgit\s+checkout\b\s+\.\s*$",                           "git checkout . 丢弃全部改动"),
+    (r"\bgit\s+branch\b[^\n]*\s-D\b",                          "git branch -D 强制删分支"),
+    (r"\bgit\s+stash\b[^\n]*\b(clear|drop)\b",                 "git stash 丢弃储藏"),
+    (r"\bnpm\s+publish\b",                                     "npm publish 发布包"),
+    (r"\bdocker\b[^\n]*\bprune\b",                             "docker prune 清理资源"),
+    (r"\bdefaults\s+delete\b",                                 "defaults delete 删 macOS 偏好"),
+    (r"\blaunchctl\b[^\n]*\b(unload|remove|bootout)\b",        "launchctl 卸载服务"),
     (r">\s*/etc/",                                             "写入 /etc 系统文件"),
     (r"(?i)\bDROP\s+(TABLE|DATABASE)\b",                       "SQL DROP"),
     (r"(?i)\bTRUNCATE\b",                                      "SQL TRUNCATE"),
@@ -83,14 +94,22 @@ RETURN_PATTERNS = [
 # 逻辑
 # ============================================================
 
-def play_sound():
-    """后台异步播放提示音,不阻塞决策返回。"""
+def play_sound(decision):
+    """后台异步播放提示音,不阻塞决策返回。
+    deny → 两声 Sosumi(急促醒目);ask → 一声 Basso。
+    """
     try:
-        subprocess.Popen(
-            ["afplay", SOUND_FILE],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        if decision == "deny":
+            # 顺序两声,用 shell 串联(路径无空格,安全)
+            subprocess.Popen(
+                "afplay {0} ; afplay {0}".format(SOUND_BLOCK),
+                shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        elif decision == "ask":
+            subprocess.Popen(
+                ["afplay", SOUND_WARN],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
     except Exception:
         pass
 
@@ -114,8 +133,7 @@ def classify_rm(cmd):
 
 def decide(decision, reason):
     """输出 PreToolUse 决策 JSON;deny/ask 档同时响铃。"""
-    if decision in ("deny", "ask"):
-        play_sound()
+    play_sound(decision)
     output = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
