@@ -1,0 +1,9 @@
+# 绝不提交含密钥的真实配置
+settings.json
+settings.local.json
+*.bak*
+
+# macOS / Python
+.DS_Store
+__pycache__/
+*.pyc
