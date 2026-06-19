@@ -60,6 +60,18 @@ cp danger-guard.py ~/.claude/hooks/
 }
 ```
 
+## 更新
+
+装过之后,更新只需拉取最新代码再跑一次安装脚本(可安全重复执行:会覆盖脚本、去重合并配置):
+
+```bash
+cd claude-code-command-guard
+git pull
+bash install.sh
+```
+
+脚本逻辑改动**即时生效**(hook 每次执行都会重新读取脚本文件),无需重启 Claude Code。
+
 ## 验证
 
 ```bash
