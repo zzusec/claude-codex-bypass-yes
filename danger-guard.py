@@ -27,9 +27,10 @@ import subprocess
 # 可配置区
 # ============================================================
 
-# 提示音:与本脚本同目录的 chime.wav(合成的风铃"叮"一声)。
+# 提示音:与本脚本同目录的 chime.wav(当前为柔和"嘟嘟"两声)。
 # 想换成系统音,把它改成 "/System/Library/Sounds/Tink.aiff" 之类即可。
 SOUND_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chime.wav")
+SOUND_VOLUME = "0.6"  # afplay 音量(0~1),越小越轻
 
 # WARN:危险但可能合理 → 响铃 + 弹确认(ask)。 (正则, 中文说明)
 WARN_PATTERNS = [
@@ -101,7 +102,7 @@ def play_sound(decision):
         return
     try:
         subprocess.Popen(
-            ["afplay", SOUND_FILE],
+            ["afplay", "-v", SOUND_VOLUME, SOUND_FILE],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
