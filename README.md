@@ -27,8 +27,8 @@
 ## 安装
 
 ```bash
-git clone https://github.com/zzusec/claude-code-command-guard.git
-cd claude-code-command-guard
+git clone https://github.com/zzusec/claude-bypass-yes.git
+cd claude-bypass-yes
 bash install.sh
 ```
 
@@ -65,7 +65,7 @@ cp danger-guard.py ~/.claude/hooks/
 装过之后,更新只需拉取最新代码再跑一次安装脚本(可安全重复执行:会覆盖脚本、去重合并配置):
 
 ```bash
-cd claude-code-command-guard
+cd claude-bypass-yes
 git pull
 bash install.sh
 ```
