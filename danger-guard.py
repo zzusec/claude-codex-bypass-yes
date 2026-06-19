@@ -18,6 +18,7 @@ Claude Code 命令守卫 (PreToolUse Hook)
 """
 
 import sys
+import os
 import json
 import re
 import subprocess
@@ -26,8 +27,9 @@ import subprocess
 # 可配置区
 # ============================================================
 
-# 提示音:短促清脆"叮"一声(可换 /System/Library/Sounds/ 下的 Tink / Glass / Pop 等)
-SOUND_FILE = "/System/Library/Sounds/Ping.aiff"
+# 提示音:与本脚本同目录的 chime.wav(合成的风铃"叮"一声)。
+# 想换成系统音,把它改成 "/System/Library/Sounds/Tink.aiff" 之类即可。
+SOUND_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chime.wav")
 
 # WARN:危险但可能合理 → 响铃 + 弹确认(ask)。 (正则, 中文说明)
 WARN_PATTERNS = [
