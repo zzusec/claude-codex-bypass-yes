@@ -4,8 +4,8 @@
 Claude Code 命令守卫 (PreToolUse Hook)
 ========================================
 作用:每条 Bash 命令执行前判定危险程度
-  - 核武器级(不可逆毁灭) → 响铃(两声,急促) + 直接拒绝(deny)
-  - 危险(可能合理)        → 响铃(一声) + 弹确认(ask),由你当场决定
+  - 核武器级(不可逆毁灭) → 响铃(清脆一声) + 直接拒绝(deny)
+  - 危险(可能合理)        → 响铃(清脆一声) + 弹确认(ask),由你当场决定
   - 命中你的 deny 名单      → 交回(exit 0),让 settings 里的静态 deny 按原语义直接拒绝
   - 安全(其余一切)        → 自动放行(allow),连确认框都不弹
 
@@ -26,9 +26,8 @@ import subprocess
 # 可配置区
 # ============================================================
 
-# 提示音(可换成 /System/Library/Sounds/ 下任意: Sosumi/Funk/Glass/Hero/Ping...)
-SOUND_WARN = "/System/Library/Sounds/Basso.aiff"    # 危险(ask):响一声
-SOUND_BLOCK = "/System/Library/Sounds/Sosumi.aiff"  # 毁灭级(deny):急促两声
+# 提示音:短促清脆"叮"一声(可换 /System/Library/Sounds/ 下的 Tink / Glass / Pop 等)
+SOUND_FILE = "/System/Library/Sounds/Ping.aiff"
 
 # WARN:危险但可能合理 → 响铃 + 弹确认(ask)。 (正则, 中文说明)
 WARN_PATTERNS = [
@@ -95,21 +94,15 @@ RETURN_PATTERNS = [
 # ============================================================
 
 def play_sound(decision):
-    """后台异步播放提示音,不阻塞决策返回。
-    deny → 两声 Sosumi(急促醒目);ask → 一声 Basso。
-    """
+    """后台异步播放提示音(清脆一声),不阻塞决策返回。"""
+    if decision not in ("deny", "ask"):
+        return
     try:
-        if decision == "deny":
-            # 顺序两声,用 shell 串联(路径无空格,安全)
-            subprocess.Popen(
-                "afplay {0} ; afplay {0}".format(SOUND_BLOCK),
-                shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
-        elif decision == "ask":
-            subprocess.Popen(
-                ["afplay", SOUND_WARN],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
+        subprocess.Popen(
+            ["afplay", SOUND_FILE],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     except Exception:
         pass
 
