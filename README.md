@@ -7,6 +7,8 @@
 比"截屏监控窗口 + 模拟回车"可靠得多:能拿到命令原文精确判定、全局对所有会话生效、
 无需辅助功能权限。仅 macOS(用 `afplay` 播放提示音)。
 
+> **前提:开启 auto 自动模式**(详见下方「前提条件」一节)。
+
 ## 效果
 
 | 命令类型 | 示例 | 守卫动作 |
@@ -17,6 +19,23 @@
 
 > **默认:非危险命令自动放行(`allow`),连确认框都不弹。** 危险命令响铃+确认,毁灭级直接拒绝。
 > 为避免 `allow` 架空你 `settings.json` 里的 `deny` 黑名单,命中 deny 名单的命令会"交回"静态规则按原语义处理,不会被自动放行。
+
+## 前提条件:开启 auto 自动模式
+
+本工具是为 Claude Code 的 **auto 自动模式**(状态栏显示 `⏵⏵ auto mode on`)设计的安全网。
+
+- **为什么需要 auto 模式**:auto 模式会自动放行命令、不再逐条问你——连危险命令也会被放行(只有 `rm -rf /` 等断路器例外)。省心,但危险命令也悄悄过了。本工具正是给这些危险命令重新加上**响铃 + 确认**。
+- 如果你用默认的 `default` 模式(本来就逐条弹确认、由你人工把关),其实**用不到**本工具。
+
+**开启方式**:在用户级 `~/.claude/settings.json` 写入:
+
+```json
+"permissions": { "defaultMode": "auto" }
+```
+
+或运行时按 **Shift+Tab** 循环切换到 auto 模式。
+
+> 注意:Claude Code v2.1.142 起,`defaultMode: "auto"` 写在项目/本地 settings(`.claude/settings.json`)会被**忽略**,必须放在**用户级** `~/.claude/settings.json`;此外 auto 模式还需你的账号满足条件并首次 opt-in 同意。
 
 ## 安装
 
@@ -71,8 +90,8 @@ echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/x"}}' \
 - `WARN_PATTERNS` — 命中 → 响铃 + 弹确认(`ask`)。
 - `BLOCK_PATTERNS` — 命中 → 响铃 + 直接拒绝(`deny`)。
 
-> 如果你开了 `skipAutoPermissionPrompt: true`,发现"危险命令响铃却没弹确认",
-> 把危险档的 `"ask"` 改成 `"deny"` 即可(一样会响铃,且一定拦得住)。
+> 实测在 `auto` 模式 + `skipAutoPermissionPrompt: true` 下,`ask` 确认框正常弹出。
+> 万一你的环境出现"响了铃却没弹确认",把危险档的 `"ask"` 改成 `"deny"` 即可——一样响铃,且一定拦得住。
 
 ## 工作原理
 
