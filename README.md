@@ -11,12 +11,12 @@
 
 | 命令类型 | 示例 | 守卫动作 |
 |---|---|---|
-| **安全** | `ls`、`git status`、`npm run build`、`echo > /dev/null` | 放行,无声 |
+| **安全** | `ls`、`git status`、`npm run build`、`echo > /dev/null` | 自动放行(`allow`),无声、不弹框 |
 | **危险** | `rm -rf …`、`sudo`、`git push --force`、`git reset --hard`、`curl … \| bash` | 响铃 + 弹确认 |
 | **毁灭级** | `rm -rf /`、`mkfs`、`dd of=/dev/disk`、fork bomb | 响铃 + 直接拒绝 |
 
-> 安全命令**不会**被自动 `allow`(那会绕过你 `settings.json` 里的 `deny` 名单),
-> 而是"不干预",交回 Claude Code 既有的权限流程。守卫只对危险命令出手。
+> **默认:非危险命令自动放行(`allow`),连确认框都不弹。** 危险命令响铃+确认,毁灭级直接拒绝。
+> 为避免 `allow` 架空你 `settings.json` 里的 `deny` 黑名单,命中 deny 名单的命令会"交回"静态规则按原语义处理,不会被自动放行。
 
 ## 安装
 
@@ -79,9 +79,10 @@ echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/x"}}' \
 Claude Code 执行 Bash 工具前触发 `PreToolUse` hook,把命令以 JSON 送到脚本 stdin。
 脚本读取 `.tool_input.command`,按本地正则匹配后用 stdout 返回决策:
 
+- `permissionDecision: "allow"` → 自动放行,跳过确认框
 - `permissionDecision: "deny"` → 拦截
 - `permissionDecision: "ask"`  → 强制弹确认
-- 无输出 + `exit 0` → 不干预,走正常权限流程
+- 无输出 + `exit 0` → 不干预(交回 deny 名单等),走正常权限流程
 
 匹配是**纯本地正则**:零延迟、离线、不调用 AI。任何解析异常都"安全失败"(放行),
 绝不会因脚本问题卡住正常命令。

@@ -6,12 +6,15 @@ Claude Code 命令守卫 (PreToolUse Hook)
 作用:每条 Bash 命令执行前判定危险程度
   - 核武器级(不可逆毁灭) → 响铃 + 直接拒绝(deny)
   - 危险(可能合理)        → 响铃 + 弹确认(ask),由你当场决定
-  - 安全(其余一切)        → 不干预(exit 0),交回 Claude Code 现有权限流程
+  - 命中你的 deny 名单      → 交回(exit 0),让 settings 里的静态 deny 按原语义直接拒绝
+  - 安全(其余一切)        → 自动放行(allow),连确认框都不弹
 
-设计原则:任何解析异常都"安全失败"(exit 0 不干预),绝不因脚本 bug 卡住正常命令。
-注意:这里只对危险命令出手;安全命令绝不输出 allow,以免绕过你 settings 里的 deny 名单。
+设计原则:
+  1. 任何解析异常都"安全失败"(exit 0 不干预),绝不因脚本 bug 卡住正常命令。
+  2. allow 会绕过整个权限系统(含你的 deny 黑名单),所以命中 deny 名单的命令绝不 allow,
+     而是交回静态规则处理 —— 见 RETURN_PATTERNS。
 
-要增删规则,直接改下面的 WARN_PATTERNS / BLOCK_PATTERNS 即可。
+要增删规则,直接改下面的 WARN_PATTERNS / BLOCK_PATTERNS / RETURN_PATTERNS 即可。
 """
 
 import sys
@@ -32,7 +35,6 @@ WARN_PATTERNS = [
     (r"\brmdir\b",                                             "rmdir 删除目录"),
     (r"\bfind\b[^\n]*\s-delete\b",                             "find -delete 批量删除"),
     (r"\bunlink\b",                                            "unlink 删除文件"),
-    (r"\bdd\b",                                                "dd 磁盘写入"),
     (r"\bdiskutil\b[^\n]*\b(erase|partition|reformat|eraseDisk|eraseVolume)\b", "diskutil 抹盘/分区"),
     (r"\bfdisk\b",                                             "fdisk 分区"),
     (r">\s*/dev/(disk|rdisk|sd|hd|nvme)",                      "重定向写入磁盘设备"),
@@ -63,6 +65,17 @@ BLOCK_PATTERNS = [
     (r"\bdd\b[^\n]*\bof=/dev/r?(disk|sd|hd|nvme)",             "dd 写入物理磁盘"),
     (r":\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:",        "fork bomb 炸弹"),
     (r"\bdiskutil\b[^\n]*\beraseDisk\b",                       "diskutil 抹掉整盘"),
+]
+
+# RETURN:命中你 settings.json 的 deny 名单、但未被上面 WARN/BLOCK 覆盖的命令。
+# 这类不自动放行(allow),而是"交回"(exit 0),让静态 deny 按你原本的"直接拒绝"语义处理。
+# 若你改了 settings 的 deny 名单,这里同步增减即可。
+RETURN_PATTERNS = [
+    r"\brm\b",                  # 你 deny 了所有 rm(含非 -rf);交回让 deny 生效
+    r"\bdd\b",                  # 你 deny 了所有 dd
+    r"\bdiskutil\b",            # 你 deny 了所有 diskutil
+    r"\binit\s+0\b",            # 你 deny 了 init 0
+    r"\bcat\b[^\n]*>\s*/dev/",  # 你 deny 了 cat 重定向到 /dev/
 ]
 
 
@@ -100,7 +113,7 @@ def classify_rm(cmd):
 
 
 def decide(decision, reason):
-    """输出 PreToolUse 决策 JSON;危险档同时响铃。"""
+    """输出 PreToolUse 决策 JSON;deny/ask 档同时响铃。"""
     if decision in ("deny", "ask"):
         play_sound()
     output = {
@@ -146,8 +159,13 @@ def main():
             decide("ask", reason)
             return
 
-    # 5) 安全 → 不干预(交回现有权限流程)
-    return
+    # 5) 命中你的 deny 名单(未被上面覆盖)→ 交回静态 deny,不自动放行
+    for pattern in RETURN_PATTERNS:
+        if re.search(pattern, cmd):
+            return
+
+    # 6) 其余安全命令 → 自动放行(连确认框都不弹)
+    decide("allow", "未命中危险规则,自动放行")
 
 
 if __name__ == "__main__":
