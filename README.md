@@ -13,12 +13,33 @@
 
 | 命令类型 | 示例 | 守卫动作 |
 |---|---|---|
-| **安全** | `ls`、`git status`、`npm run build`、`echo > /dev/null` | 自动放行(`allow`),无声、不弹框 |
-| **危险** | `rm -rf …`、`sudo`、`git push --force`、`git reset --hard`、`curl … \| bash` | 响铃 + 弹确认 |
-| **毁灭级** | `rm -rf /`、`mkfs`、`dd of=/dev/disk`、fork bomb | 响铃 + 直接拒绝 |
+| **安全** | `ls`、`git status`、`npm run build`、`sudo apt install`、`kill -9 …`、`psql -c "DELETE …"` | 自动放行(`allow`),无声、不弹框 |
+| **危险** | `rm -rf …`、`git push --force`、`git reset --hard`、`curl … \| bash`、`shutdown` | 响铃 + 弹确认 |
+| **毁灭级** | `rm -rf /`、`mkfs`、`dd of=/dev/disk`、`> /dev/disk`、fork bomb | 响铃 + 直接拒绝 |
 
 > **默认:非危险命令自动放行(`allow`),连确认框都不弹。** 危险命令响铃+确认,毁灭级直接拒绝。
 > 为避免 `allow` 架空你 `settings.json` 里的 `deny` 黑名单,命中 deny 名单的命令会"交回"静态规则按原语义处理,不会被自动放行。
+
+### 只拦「真危险」,不拦「数据」
+
+守卫只针对**真正系统级、难撤销、对外发布**的操作。`sudo`、`kill -9`、`killall`、`pkill`、`rmdir`、
+`unlink`、`git branch -D`、`chmod 777 ./x` 等日常命令**不再拦截**。
+
+更关键:匹配只看**命令本身**,不看引号里的数据。以下都属于安全放行 ——
+
+```bash
+git commit -m "remove unlink and reboot logic"   # commit 信息里的危险词
+psql -c "DELETE FROM logs"                        # SQL 语句
+echo "rm -rf / is dangerous" > notes.txt          # echo/写文件的文本内容
+```
+
+而 `bash -c "..."` / `eval "..."` 里的内容会被 shell 真正执行,**仍会补扫**,危险照样拦得住。
+
+### 跑测试
+
+```bash
+bash test.sh   # 30 个用例覆盖「误报放行 / 真危险 ask / 毁灭级 deny」
+```
 
 ## 前提条件
 
@@ -91,6 +112,27 @@ echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/x"}}' \
 
 > 实测在 `auto` 模式 + `skipAutoPermissionPrompt: true` 下,`ask` 确认框正常弹出。
 > 万一你的环境出现"响了铃却没弹确认",把危险档的 `"ask"` 改成 `"deny"` 即可——一样响铃,且一定拦得住。
+
+## 永久放行(白名单)
+
+有些命令你确定安全、不想每次被拦,可加进白名单:**命中即直接放行,不响铃、不确认**。
+白名单是 `~/.claude/hooks/allowlist.txt`,每行一个正则,`#` 开头为注释,**改完即时生效**(无需重启)。
+
+```bash
+# 例:以后 git restore 直接放行
+echo '^\s*git\s+restore\b' >> ~/.claude/hooks/allowlist.txt
+```
+
+或直接编辑该文件。几个示例:
+
+```
+\bgit\s+reset\s+--hard\b           # git reset --hard
+\bgit\s+clean\b[^\n]*\s-\w*f       # git clean -f
+\bdocker\b[^\n]*\bprune\b          # docker ... prune
+\bgit\s+push\b[^\n]*--force\b      # git push --force
+```
+
+> 白名单优先级高于危险确认,但**毁灭级命令(`rm -rf /`、`mkfs`、`dd` 写盘)仍会兜底拦截**,白名单放不了,防手滑。
 
 ## 工作原理
 

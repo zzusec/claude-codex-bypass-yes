@@ -1,0 +1,15 @@
+# 命令白名单 —— 你认为安全、想永久放行的命令
+# ------------------------------------------------------------
+# 每行一个正则;命中即【直接放行】(不响铃、不弹确认)。# 开头为注释。
+# 改完【即时生效】,无需重启。毁灭级命令(rm -rf /、mkfs、dd 写盘)仍会兜底拦截。
+#
+# 安装时本文件会被复制为 allowlist.txt;请编辑 allowlist.txt(而非本示例)。
+# 快捷添加:  echo '你的正则' >> ~/.claude/hooks/allowlist.txt
+#
+# 注:sudo / kill / killall / rmdir / git branch -D 等已默认放行,无需再加白名单。
+# 这里只用来放行「默认会弹确认」的危险命令(如 git reset --hard、docker prune --volumes)。
+#
+# 示例(去掉行首 # 即生效):
+# \bgit\s+reset\s+--hard\b
+# \bgit\s+clean\b[^\n]*\s-\w*f
+# \bdocker\b[^\n]*\bprune\b
