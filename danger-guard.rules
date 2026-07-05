@@ -1,0 +1,43 @@
+# claude-bypass-yes 的 Codex 危险确认层(安装到 ~/.codex/rules/danger-guard.rules)
+# ============================================================
+# 分工:毁灭级由 danger-guard-codex.py hook 直接 deny;安全命令由 hook 直接 allow;
+# 本文件只补「危险 → 弹确认(prompt)」这一档(Codex hook 不支持 ask,只能靠 rules)。
+#
+# 注意:rules 是 argv 前缀匹配,多条命中取最严格(forbidden > prompt > allow)。
+# 若其他 .rules 文件对同类命令写了 forbidden,会压过这里的 prompt。
+
+# rm:注意 rules 优先级高于 hook 的 allow(实测),所以不能写整类 ["rm"],
+# 否则普通 rm foo.txt 也会弹确认/在 exec 模式被拒。
+# 只对常见 rm -rf 形态弹确认;普通 rm 由 hook 放行;rm -rf /、~ 由 hook 直接 deny;
+# 其余变体(如 rm dir -rf)落到沙箱:工作区内直接执行,工作区外提权弹确认。
+prefix_rule(pattern=["rm", "-rf"], decision="prompt", justification="rm -rf 递归强制删除")
+prefix_rule(pattern=["rm", "-fr"], decision="prompt", justification="rm -fr 递归强制删除")
+prefix_rule(pattern=["rm", "-r", "-f"], decision="prompt", justification="rm -r -f 递归强制删除")
+prefix_rule(pattern=["rm", "-f", "-r"], decision="prompt", justification="rm -f -r 递归强制删除")
+
+# 关机 / 重启
+prefix_rule(pattern=["shutdown"], decision="prompt", justification="shutdown 关机")
+prefix_rule(pattern=["reboot"], decision="prompt", justification="reboot 重启")
+prefix_rule(pattern=["halt"], decision="prompt", justification="halt 停机")
+prefix_rule(pattern=["poweroff"], decision="prompt", justification="poweroff 断电")
+
+# 磁盘 / 分区
+prefix_rule(pattern=["fdisk"], decision="prompt", justification="fdisk 分区")
+prefix_rule(pattern=["diskutil", "eraseVolume"], decision="prompt", justification="diskutil 抹卷")
+prefix_rule(pattern=["diskutil", "partitionDisk"], decision="prompt", justification="diskutil 分区")
+prefix_rule(pattern=["diskutil", "reformat"], decision="prompt", justification="diskutil 重新格式化")
+prefix_rule(pattern=["diskutil", "eraseDisk"], decision="forbidden", justification="diskutil 抹掉整盘,不可逆")
+prefix_rule(pattern=["mkfs"], decision="forbidden", justification="mkfs 格式化文件系统,不可逆")
+
+# git 破坏性 / 改远程历史
+prefix_rule(pattern=["git", "push", "--force"], decision="prompt", justification="git 强制推送")
+prefix_rule(pattern=["git", "push", "-f"], decision="prompt", justification="git 强制推送")
+prefix_rule(pattern=["git", "reset", "--hard"], decision="prompt", justification="git reset --hard 丢弃改动")
+prefix_rule(pattern=["git", "clean", "-f"], decision="prompt", justification="git clean -f 删未跟踪文件")
+prefix_rule(pattern=["git", "clean", "-fd"], decision="prompt", justification="git clean -fd 删未跟踪文件/目录")
+prefix_rule(pattern=["git", "clean", "-df"], decision="prompt", justification="git clean -df 删未跟踪文件/目录")
+prefix_rule(pattern=["git", "clean", "-fdx"], decision="prompt", justification="git clean -fdx 删未跟踪+忽略文件")
+
+# 对外发布 / 定时任务
+prefix_rule(pattern=["npm", "publish"], decision="prompt", justification="npm publish 发布包")
+prefix_rule(pattern=["crontab", "-r"], decision="prompt", justification="crontab -r 清空定时任务")
