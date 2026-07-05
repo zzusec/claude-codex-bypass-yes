@@ -1,81 +1,30 @@
 # Claude Code / Codex 命令守卫 (danger-guard)
 
 给 Claude Code 和 Codex CLI 加一道**安全网**:每条命令执行前自动判定危险程度——
-**安全命令自动放行,危险命令响铃并弹确认,毁灭级命令直接拦下。**
-
-> Codex CLI(≥0.142)用同一套判定引擎,见下方 [Codex CLI 支持](#codex-cli-支持)。
-
-基于 Claude Code 官方的 [PreToolUse Hook](https://code.claude.com/docs/en/hooks),
-比"截屏监控窗口 + 模拟回车"可靠得多:能拿到命令原文精确判定、全局对所有会话生效、
-无需辅助功能权限。仅 macOS(用 `afplay` 播放提示音)。
-
-> **前提:开启 auto 模式**(状态栏显示 `⏵⏵ auto mode on`)。
-
-## 效果
+**安全命令自动放行(不弹任何确认),危险命令响铃并弹确认,毁灭级命令直接拦下。**
+纯本地正则判定:零延迟、离线、不调用 AI。仅 macOS(用 `afplay` 播放提示音)。
 
 | 命令类型 | 示例 | 守卫动作 |
 |---|---|---|
-| **安全** | `ls`、`git status`、`npm run build`、`sudo apt install`、`kill -9 …`、`psql -c "DELETE …"` | 自动放行(`allow`),无声、不弹框 |
+| **安全** | `ls`、`git status`、`npm run build`、`sudo apt install`、`kill -9 …`、`psql -c "DELETE …"` | 自动放行,无声、不弹框 |
 | **危险** | `rm -rf …`、`git push --force`、`git reset --hard`、`curl … \| bash`、`shutdown` | 响铃 + 弹确认 |
 | **毁灭级** | `rm -rf /`、`mkfs`、`dd of=/dev/disk`、`> /dev/disk`、fork bomb | 响铃 + 直接拒绝 |
 
-> **默认:非危险命令自动放行(`allow`),连确认框都不弹。** 危险命令响铃+确认,毁灭级直接拒绝。
-> 为避免 `allow` 架空你 `settings.json` 里的 `deny` 黑名单,命中 deny 名单的命令会"交回"静态规则按原语义处理,不会被自动放行。
-
-### 只拦「真危险」,不拦「数据」
-
-守卫只针对**真正系统级、难撤销、对外发布**的操作。`sudo`、`kill -9`、`killall`、`pkill`、`rmdir`、
-`unlink`、`git branch -D`、`chmod 777 ./x` 等日常命令**不再拦截**。
-
-更关键:匹配只看**命令本身**,不看引号里的数据。以下都属于安全放行 ——
-
-```bash
-git commit -m "remove unlink and reboot logic"   # commit 信息里的危险词
-psql -c "DELETE FROM logs"                        # SQL 语句
-echo "rm -rf / is dangerous" > notes.txt          # echo/写文件的文本内容
-```
-
+匹配只看**命令本身**,不看引号里的数据:`git commit -m "remove reboot logic"`、
+`psql -c "DELETE FROM logs"`、`echo "rm -rf /" > notes.txt` 都会正常放行;
 而 `bash -c "..."` / `eval "..."` 里的内容会被 shell 真正执行,**仍会补扫**,危险照样拦得住。
 
-### 跑测试
+装好后**不需要学任何新命令**,照常让 AI 干活即可。
 
-```bash
-bash test.sh   # 30 个用例覆盖「误报放行 / 真危险 ask / 毁灭级 deny」
-```
+- 用 **Claude Code** → 看 [第一部分](#第一部分claude-code)
+- 用 **Codex CLI** → 看 [第二部分](#第二部分codex-cli)
+- 两个都用 → 两部分都装,白名单等配置自动共享(见[通用配置](#通用配置))
 
-## 怎么用
+---
 
-装好后**不需要学任何新命令**——照常让 AI 干活,守卫在每条命令执行前自动介入。
+## 第一部分:Claude Code
 
-### Claude Code 用户
-
-1. 安装(见下方[安装](#安装)),重启 Claude Code;
-2. 按 **Shift+Tab** 切到 auto 模式(状态栏显示 `⏵⏵ auto mode on`)。auto 模式下安全命令全自动执行,不用再一条条按确认;
-3. 之后的日常体验:
-   - **安全命令**(绝大多数):无声直接执行,你不会有任何感知;
-   - **危险命令**:响一声铃 + 弹出确认框——看清命令内容再选允许或拒绝;
-   - **毁灭级命令**:响铃并直接拒绝,Claude 会收到拒绝原因自己换做法,无需你操作。
-
-### Codex 用户
-
-1. 安装(见 [Codex CLI 支持](#codex-cli-支持)),然后在 Codex 里输入 `/hooks`,把 danger-guard 的 **2 条 hook 逐条 Trust**——列表显示 `Active 1、Review 0` 才算生效(Codex 的强制安全要求,只需做一次);
-2. 交互模式(`codex`)体验与 Claude 版相同:安全无感、危险响铃+弹确认、毁灭级直接拒绝;
-3. 非交互模式(`codex exec`,脚本/worker 自动化):没人能点确认框,所以**危险命令一律自动拒绝**,模型会拿到拒绝原因并如实汇报;如果没做第 1 步的信任,需给命令加 `--dangerously-bypass-hook-trust` 参数 hooks 才会运行。
-
-### 被误拦了怎么办
-
-确认某类命令安全、不想再被拦:往白名单加一行正则,**即时生效、Claude 和 Codex 共享**(详见[永久放行(白名单)](#永久放行白名单)):
-
-```bash
-# 例:以后 git restore 直接放行
-echo '^\s*git\s+restore\b' >> ~/.claude/hooks/allowlist.txt
-```
-
-> Codex 注意:白名单只免掉 hook 层拦截;命中 rules `prompt` 档的命令(`rm -rf`、
-> `git reset --hard` 等)仍会弹确认——想连确认都不弹,需编辑
-> `~/.codex/rules/danger-guard.rules` 删掉对应行。
-
-## 安装
+### 1. 安装
 
 ```bash
 git clone https://github.com/zzusec/claude-codex-bypass-yes.git
@@ -87,9 +36,8 @@ bash install.sh
 1. 把 `danger-guard.py` 复制到 `~/.claude/hooks/`;
 2. 往 `~/.claude/settings.json` **安全合并** `PreToolUse` hook 配置(先备份、保留你已有内容、不动任何密钥)。
 
-装完**重启 Claude Code**(或在会话里输入 `/hooks` 确认加载)即可生效。以后新开的窗口自动带上。
-
-### 手动安装
+<details>
+<summary>不想跑脚本?点开看手动安装</summary>
 
 ```bash
 mkdir -p ~/.claude/hooks
@@ -110,50 +58,117 @@ cp danger-guard.py ~/.claude/hooks/
   ]
 }
 ```
+</details>
 
-## 更新
+### 2. 启用
 
-装过之后,更新只需拉取最新代码再跑一次安装脚本(可安全重复执行:会覆盖脚本、去重合并配置):
+1. **重启 Claude Code**(或在会话里输入 `/hooks` 确认已加载);
+2. 按 **Shift+Tab** 切到 auto 模式(状态栏显示 `⏵⏵ auto mode on`)。
 
-```bash
-cd claude-codex-bypass-yes
-git pull
-bash install.sh
-```
+auto 模式下安全命令全自动执行,守卫负责给危险命令补上响铃+确认。以后新开的窗口自动带上,无需重复设置。
 
-脚本逻辑改动**即时生效**(hook 每次执行都会重新读取脚本文件),无需重启 Claude Code。
-
-## 验证
+### 3. 验证
 
 ```bash
 echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/x"}}' \
   | /usr/bin/python3 ~/.claude/hooks/danger-guard.py
 ```
 
-应打印一段 `permissionDecision: "ask"` 的 JSON 并响一声。安全命令(如 `ls -la`)则**无任何输出**。
+- 应打印一段 `permissionDecision: "ask"` 的 JSON 并**响一声铃**;
+- 换成安全命令(如 `ls -la`)则**无任何输出**;
+- 想跑全量回归:`bash test.sh`(30 个用例)。
 
-## 自定义
+### 日常体验
 
-编辑 `~/.claude/hooks/danger-guard.py` 顶部即可:
+- **安全命令**(绝大多数):无声直接执行,你不会有任何感知;
+- **危险命令**:响一声铃 + 弹确认框,看清命令内容再选允许或拒绝;
+- **毁灭级命令**:响铃并直接拒绝,Claude 会收到拒绝原因自己换做法,无需你操作。
 
-- `SOUND_FILE` — 提示音,可换成 `/System/Library/Sounds/` 下的 `Sosumi` / `Funk` / `Glass` / `Hero` 等。
-- `WARN_PATTERNS` — 命中 → 响铃 + 弹确认(`ask`)。
-- `BLOCK_PATTERNS` — 命中 → 响铃 + 直接拒绝(`deny`)。
+> 实测在 auto 模式 + `skipAutoPermissionPrompt: true` 下,`ask` 确认框正常弹出。
+> 万一你的环境"响了铃却没弹确认",把 `danger-guard.py` 里危险档的 `"ask"` 改成 `"deny"` 即可——一样响铃,且一定拦得住。
 
-> 实测在 `auto` 模式 + `skipAutoPermissionPrompt: true` 下,`ask` 确认框正常弹出。
-> 万一你的环境出现"响了铃却没弹确认",把危险档的 `"ask"` 改成 `"deny"` 即可——一样响铃,且一定拦得住。
+---
 
-## 永久放行(白名单)
+## 第二部分:Codex CLI
 
-有些命令你确定安全、不想每次被拦,可加进白名单:**命中即直接放行,不响铃、不确认**。
-白名单是 `~/.claude/hooks/allowlist.txt`,每行一个正则,`#` 开头为注释,**改完即时生效**(无需重启)。
+需要 Codex CLI ≥ 0.142(hooks 已 stable)。因 Codex 的 PreToolUse hook **不支持 `ask`**,
+「危险 → 弹确认」由三层组合实现(装完自动生效,不用理解也能用):
+
+| 层 | 职责 |
+|---|---|
+| **PreToolUse hook** | 毁灭级 → 响铃 + 拒绝;安全/白名单 → 放行不弹框;危险 → 响铃后交给下层 |
+| **rules(prompt 档)** | 危险命令前缀(`rm -rf`、`git reset --hard`、`shutdown` 等)→ 弹原生确认框 |
+| **PermissionRequest hook** | 安全命令的沙箱提权请求自动点「允许」(bypass yes);危险留给用户;毁灭级拒绝 |
+
+### 1. 安装
+
+```bash
+git clone https://github.com/zzusec/claude-codex-bypass-yes.git
+cd claude-codex-bypass-yes
+bash install-codex.sh
+```
+
+`install-codex.sh` 会:
+1. 把 `danger-guard-codex.py` 和铃声复制到 `~/.codex/hooks/`;
+2. 合并 `~/.codex/hooks.json`(先备份),注册 PreToolUse + PermissionRequest 两条 hook;
+3. 安装危险确认规则 `~/.codex/rules/danger-guard.rules`;
+4. 检测其他 `.rules` 文件里会压过弹确认的 `forbidden` 冲突条目并提示处理。
+
+### 2. 启用(必做:信任 hooks)
+
+Codex 强制要求用户级 hooks 经过**人工信任**才会运行(否则静默跳过):
+
+1. 打开 Codex,输入 `/hooks`;
+2. 会看到提示 `2 hooks need review`——进入 **PreToolUse** 行,选中 danger-guard 条目,选择 **Trust**;
+3. 返回后对 **PermissionRequest** 行重复同样操作;
+4. 列表两行变成 `Active 1、Review 0` 即生效。
+
+只需做一次;以后 `hooks.json` 内容有变(如重跑安装脚本)才需重新信任,只改脚本内容/白名单不用。
+
+> 无人值守自动化(脚本里跑 `codex exec`)不方便做信任时,可给命令加
+> `--dangerously-bypass-hook-trust` 参数。
+
+### 3. 验证
+
+```bash
+# 验证 hook:应打印 permissionDecision: "deny" 的 JSON 并响一声铃
+echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' \
+  | /usr/bin/python3 ~/.codex/hooks/danger-guard-codex.py PreToolUse
+
+# 验证 rules:应输出 decision: "prompt"
+codex execpolicy check --rules ~/.codex/rules/danger-guard.rules --pretty -- git reset --hard HEAD~1
+```
+
+想跑全量回归:`bash test-codex.sh`(29 个用例)。
+最直观的实测:让 Codex 跑 `ls`(应无任何弹框),再让它跑 `git reset --hard HEAD`(应弹确认框)。
+
+### 日常体验
+
+- **交互模式(`codex`)**:与 Claude 版一致——安全无感、危险响铃+弹确认、毁灭级直接拒绝;
+- **非交互(`codex exec`,脚本/worker 自动化)**:没人能点确认框,**危险命令一律自动拒绝**,模型会拿到拒绝原因并如实汇报——对无人值守场景这正是想要的安全行为。
+
+### 实测要点(codex-cli 0.142.5,自定义规则前必读)
+
+- **rules 优先级高于 hook 的 allow**,多规则命中取最严格(`forbidden` > `prompt` > `allow`)。
+  所以危险档规则只写具体形态(如 `["rm","-rf"]`),不能写整类 `["rm"]`,否则普通
+  `rm foo.txt` 也会弹确认、在 exec 模式被拒;
+- 白名单只影响 hook 层,**压不过** rules 的 `prompt/forbidden`——想让某条危险命令连确认都不弹,
+  需编辑 `~/.codex/rules/danger-guard.rules` 删掉对应行。
+
+---
+
+## 通用配置
+
+### 永久放行(白名单)
+
+有些命令你确定安全、不想每次被拦:往白名单加一行正则,**命中即直接放行,不响铃、不确认,改完即时生效**。Claude 和 Codex **共享**两个白名单文件(`~/.claude/hooks/allowlist.txt` 和 `~/.codex/hooks/allowlist.txt`,都会读取):
 
 ```bash
 # 例:以后 git restore 直接放行
 echo '^\s*git\s+restore\b' >> ~/.claude/hooks/allowlist.txt
 ```
 
-或直接编辑该文件。几个示例:
+几个示例(每行一个正则,`#` 开头为注释):
 
 ```
 \bgit\s+reset\s+--hard\b           # git reset --hard
@@ -162,72 +177,40 @@ echo '^\s*git\s+restore\b' >> ~/.claude/hooks/allowlist.txt
 \bgit\s+push\b[^\n]*--force\b      # git push --force
 ```
 
-> 白名单优先级高于危险确认,但**毁灭级命令(`rm -rf /`、`mkfs`、`dd` 写盘)仍会兜底拦截**,白名单放不了,防手滑。
+> 白名单优先级高于危险确认,但**毁灭级命令(`rm -rf /`、`mkfs`、`dd` 写盘)仍会兜底拦截**,白名单放不了,防手滑。Codex 侧另见上方「实测要点」。
 
-## 工作原理
+### 自定义判定规则
 
-Claude Code 执行 Bash 工具前触发 `PreToolUse` hook,把命令以 JSON 送到脚本 stdin。
-脚本读取 `.tool_input.command`,按本地正则匹配后用 stdout 返回决策:
+编辑 `~/.claude/hooks/danger-guard.py` / `~/.codex/hooks/danger-guard-codex.py` 顶部:
 
-- `permissionDecision: "allow"` → 自动放行,跳过确认框
-- `permissionDecision: "deny"` → 拦截
-- `permissionDecision: "ask"`  → 强制弹确认
-- 无输出 + `exit 0` → 不干预(交回 deny 名单等),走正常权限流程
+- `SOUND_FILE` — 提示音,可换成 `/System/Library/Sounds/` 下的 `Sosumi` / `Funk` / `Glass` / `Hero` 等;
+- `WARN_PATTERNS` — 命中 → 响铃 + 弹确认;
+- `BLOCK_PATTERNS` — 命中 → 响铃 + 直接拒绝。
 
-匹配是**纯本地正则**:零延迟、离线、不调用 AI。任何解析异常都"安全失败"(放行),
-绝不会因脚本问题卡住正常命令。
+脚本内容改动**即时生效**(每次执行都重新读取),无需重启。
 
-## Codex CLI 支持
-
-同一套判定引擎已适配 Codex CLI(需 ≥0.142,hooks 已 stable)。因 Codex 的 PreToolUse hook
-**不支持 `ask`**,「危险 → 弹确认」由三层组合实现:
-
-| 层 | 职责 |
-|---|---|
-| **PreToolUse hook** | 毁灭级 → 响铃 + deny;安全/白名单 → allow(不弹框);危险 → 响铃后不干预,交给下层 |
-| **rules(prompt 档)** | 危险命令前缀(`rm -rf`、`git reset --hard`、`shutdown` 等)→ 弹原生确认框 |
-| **PermissionRequest hook** | 安全命令的沙箱提权请求自动点「允许」(bypass yes);危险沉默留给用户;毁灭级拒绝 |
-
-### 安装
+### 更新
 
 ```bash
-git clone https://github.com/zzusec/claude-codex-bypass-yes.git
 cd claude-codex-bypass-yes
-bash install-codex.sh   # 只用 Codex 装这个即可;Claude Code 版是 bash install.sh
+git pull
+bash install.sh          # Claude Code 版
+bash install-codex.sh    # Codex 版
 ```
 
-会复制 `danger-guard-codex.py` 到 `~/.codex/hooks/`、合并 `~/.codex/hooks.json`(先备份)、
-安装 `~/.codex/rules/danger-guard.rules`,并检测其他 `.rules` 文件里会压过 prompt 的
-`forbidden` 冲突条目。
+安装脚本可安全重复执行(覆盖脚本、去重合并配置)。注意 Codex 重装后 hooks.json 有变,需重新 `/hooks` 信任。
 
-> **必做一步:信任 hooks。** Codex 要求用户级 hooks 经过审查信任才会运行——
-> 在 Codex TUI 里输入 `/hooks` 信任守卫(一次即可;`hooks.json` 内容变更后需重新信任)。
-> 无人值守自动化可给 `codex exec` 加 `--dangerously-bypass-hook-trust`。
+### 卸载
 
-### 实测要点(codex-cli 0.142.5)
+- **Claude Code**:删除 `~/.claude/settings.json` 里新增的 `hooks` 字段;
+- **Codex**:删除 `~/.codex/hooks.json` 里指向 danger-guard-codex.py 的条目和 `~/.codex/rules/danger-guard.rules`。
 
-- **rules 优先级高于 hook 的 allow**,多规则命中取最严格(`forbidden` > `prompt` > `allow`)。
-  所以危险档规则只写具体形态(如 `["rm","-rf"]`),不能写整类 `["rm"]`,否则普通
-  `rm foo.txt` 也会弹确认、在 exec 模式被拒。
-- `codex exec`(审批=Never)下 `prompt` 档 = **直接拒绝**,模型会拿到拒绝原因并如实汇报——
-  对无人值守 worker 这正是想要的安全行为。
-- 白名单**与 Claude 版共享**:`~/.codex/hooks/allowlist.txt` 和 `~/.claude/hooks/allowlist.txt`
-  都会读取,放行一次两边生效。但注意白名单只影响 hook,压不过 rules 的 `prompt/forbidden`。
+### 工作原理
 
-### 测试
-
-```bash
-bash test-codex.sh   # 29 个用例:误报放行 / 危险沉默交后手 / 毁灭级 deny / 提权自动允许
-```
-
-### 卸载(Codex)
-
-删除 `~/.codex/hooks.json` 里指向 danger-guard-codex.py 的条目和
-`~/.codex/rules/danger-guard.rules` 即可。
-
-## 卸载
-
-删除 `~/.claude/settings.json` 里新增的 `hooks` 字段即可(其余配置不受影响)。
+两边机制相同:执行 Bash 命令前触发 `PreToolUse` hook,命令以 JSON 送到脚本 stdin,
+脚本按本地正则匹配后用 stdout 返回决策(`allow` 放行 / `deny` 拦截 / Claude 版另有 `ask` 弹确认;
+无输出 = 不干预,走正常权限流程)。任何解析异常都"安全失败"(不干预),绝不因脚本 bug 卡住正常命令。
+Codex 版因 hook 无 `ask`,弹确认由 rules `prompt` 档和 PermissionRequest hook 配合完成(见第二部分表格)。
 
 ## 许可
 
