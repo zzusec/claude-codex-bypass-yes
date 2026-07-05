@@ -1,9 +1,9 @@
-# Claude Code 命令守卫 (danger-guard)
+# Claude Code / Codex 命令守卫 (danger-guard)
 
-给 Claude Code 加一道**安全网**:每条命令执行前自动判定危险程度——
+给 Claude Code 和 Codex CLI 加一道**安全网**:每条命令执行前自动判定危险程度——
 **安全命令自动放行,危险命令响铃并弹确认,毁灭级命令直接拦下。**
 
-> 也支持 **Codex CLI**(≥0.142):同一套判定引擎,见下方 [Codex CLI 支持](#codex-cli-支持)。
+> Codex CLI(≥0.142)用同一套判定引擎,见下方 [Codex CLI 支持](#codex-cli-支持)。
 
 基于 Claude Code 官方的 [PreToolUse Hook](https://code.claude.com/docs/en/hooks),
 比"截屏监控窗口 + 模拟回车"可靠得多:能拿到命令原文精确判定、全局对所有会话生效、
@@ -50,8 +50,8 @@ bash test.sh   # 30 个用例覆盖「误报放行 / 真危险 ask / 毁灭级 d
 ## 安装
 
 ```bash
-git clone https://github.com/zzusec/claude-bypass-yes.git
-cd claude-bypass-yes
+git clone https://github.com/zzusec/claude-codex-bypass-yes.git
+cd claude-codex-bypass-yes
 bash install.sh
 ```
 
@@ -88,7 +88,7 @@ cp danger-guard.py ~/.claude/hooks/
 装过之后,更新只需拉取最新代码再跑一次安装脚本(可安全重复执行:会覆盖脚本、去重合并配置):
 
 ```bash
-cd claude-bypass-yes
+cd claude-codex-bypass-yes
 git pull
 bash install.sh
 ```
