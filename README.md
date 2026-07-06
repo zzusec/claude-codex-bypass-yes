@@ -34,7 +34,11 @@ bash install.sh
 
 `install.sh` 会:
 1. 把 `danger-guard.py` 复制到 `~/.claude/hooks/`;
-2. 往 `~/.claude/settings.json` **安全合并** `PreToolUse` hook 配置(先备份、保留你已有内容、不动任何密钥)。
+2. 往 `~/.claude/settings.json` **安全合并** `PreToolUse` hook 配置(先备份、保留你已有内容、不动任何密钥);
+3. 询问是否把默认权限模式设为 `bypassPermissions`(消除 `.` source/eval 类内建弹窗,见下方说明;默认否)。
+
+> 想在新机器一步到位、不逐个确认,直接:`bash install.sh --bypass`——装钩子并顺带设好 `bypassPermissions`(含处理 `settings.local.json` 的优先级)。加 `--no-bypass` 则明确只装钩子。
+> 注意:`bypassPermissions` 只能写到你**本机**的 `~/.claude/settings.json`(用户级)才生效;提交进 git 仓库的项目级 `.claude/settings.json` 若设这个模式会被 Claude Code **故意忽略**(防恶意仓库 clone 即提权),所以“clone 即自动 bypass”做不到,得靠这个安装脚本。
 
 <details>
 <summary>不想跑脚本?点开看手动安装</summary>
