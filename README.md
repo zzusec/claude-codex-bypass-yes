@@ -87,6 +87,9 @@ echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/x"}}' \
 > 实测在 auto 模式 + `skipAutoPermissionPrompt: true` 下,`ask` 确认框正常弹出。
 > 万一你的环境"响了铃却没弹确认",把 `danger-guard.py` 里危险档的 `"ask"` 改成 `"deny"` 即可——一样响铃,且一定拦得住。
 
+> **本钩子管不到的一类弹窗(重要):** Claude Code 自带一层**静态安全检查**,对"会把参数当 shell 代码执行"的命令——`.` / `source` / `eval` / `bash -c` 等——因无法静态分析而强制弹确认(提示形如 `'.' evaluates arguments as shell code`)。这层内建 `ask` 会**覆盖本钩子返回的 `allow` 和 `Bash(*)` 白名单**,所以钩子层无法消除它。典型触发:`. "$HOME/.cargo/env" && npm run fmt:rust`。
+> 要让这类命令也免弹窗,只能靠**权限模式**:把 `~/.claude/settings.json` 的 `permissions.defaultMode` 设为 `"bypassPermissions"`(并加 `"skipDangerousModePermissionPrompt": true` 免掉开机那次"确认危险模式"框)。bypass 下除 `rm` 危险操作外内建检查全部自动放行,而本钩子的 `deny` 档 + 你的 `deny` 列表仍会拦下真正危险的命令,安全网不丢。若有 `settings.local.json`,它的 `defaultMode` 优先级更高,需一并改。
+
 ---
 
 ## 第二部分:Codex CLI
