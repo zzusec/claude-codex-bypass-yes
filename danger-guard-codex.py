@@ -36,7 +36,7 @@ import subprocess
 # ============================================================
 
 SOUND_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chime.wav")
-SOUND_VOLUME = "0.6"
+SOUND_VOLUME = "0.25"
 
 _SYS = r"(?:/(?:etc|usr|bin|sbin|var|lib|lib64|boot|opt|root|System|Library|Applications)\b|\s/\s|\s/$|\s/\*)"
 

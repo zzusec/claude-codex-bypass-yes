@@ -1,14 +1,14 @@
 # Claude Code / Codex 命令守卫
 
-给 Claude Code 和 Codex CLI 加一层命令安全网（仅 macOS）：
+**主要作用：除危险命令外一律自动允许，减少反复点 Yes。**
 
-| 类型 | 例子 | 行为 |
-|---|---|---|
-| 安全 | `ls`、`git status`、`npm run build` | 自动放行，不弹窗 |
-| 危险 | `rm -rf …`、`git reset --hard`、`git push --force` | 响铃 + 弹确认 |
-| 毁灭级 | `rm -rf /`、`mkfs`、`dd` 写盘 | 响铃 + 直接拒绝 |
+给 Claude Code / Codex 加一层本地判断（仅 macOS）：
 
-装好后照常用 AI 即可，不用学新命令。
+- 日常命令（`ls`、`git status`、`npm run`、装包、查日志…）→ **直接放行，不弹确认**
+- 危险命令（`rm -rf …`、`git reset --hard`、`git push --force`…）→ **响铃 + 让你确认**
+- 毁灭级（`rm -rf /`、`mkfs`、`dd` 写盘…）→ **响铃 + 直接拒绝**
+
+目标体验：AI 能自己干活，你不用一直点 Yes；真正危险时才拦一下。
 
 ---
 
@@ -22,8 +22,7 @@ cd claude-codex-bypass-yes
 bash install.sh --bypass
 ```
 
-- `install.sh`：只装钩子  
-- `install.sh --bypass`：装钩子 + 设 `bypassPermissions`（推荐，少弹无用确认）  
+- `install.sh --bypass`：装钩子 + 尽量少弹无用确认（推荐）
 - 装完**重启 Claude Code**
 
 ### 验证
@@ -33,11 +32,8 @@ bash install.sh --bypass
 echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/x"}}' \
   | /usr/bin/python3 ~/.claude/hooks/danger-guard.py
 
-# 全量测试
 bash test.sh
 ```
-
-或在 Claude 里让它跑 `ls`（应无弹窗），再跑 `git reset --hard HEAD`（应响铃并确认）。
 
 ### 升级
 
@@ -47,7 +43,7 @@ git pull
 bash install.sh --bypass
 ```
 
-然后重启 Claude Code。
+重启 Claude Code。
 
 ---
 
@@ -63,16 +59,19 @@ cd claude-codex-bypass-yes
 bash install-codex.sh
 ```
 
-装完后在 Codex 里输入 `/hooks`，把 **PreToolUse** 和 **PermissionRequest** 两条 danger-guard **Trust** 一次。
+装完在 Codex 输入 `/hooks`，把 **PreToolUse**、**PermissionRequest** 两条 danger-guard **Trust** 一次。
 
 ### 验证
 
 ```bash
-# 毁灭级：应响铃，并输出 permissionDecision: "deny"
+# 安全命令：应无输出（静默=放行）
+echo '{"tool_name":"Bash","tool_input":{"command":"ls"}}' \
+  | /usr/bin/python3 ~/.codex/hooks/danger-guard-codex.py PreToolUse
+
+# 毁灭级：应响铃 + permissionDecision: "deny"
 echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' \
   | /usr/bin/python3 ~/.codex/hooks/danger-guard-codex.py PreToolUse
 
-# 全量测试
 bash test-codex.sh
 ```
 
@@ -84,26 +83,26 @@ git pull
 bash install-codex.sh
 ```
 
-若 `hooks.json` 有变化，再在 Codex 里 `/hooks` 重新 Trust 一次。
+`hooks.json` 有变时，再 `/hooks` Trust 一次。
 
 ---
 
-## 可选：永久放行某类危险命令
-
-不想每次确认时，往白名单加一行正则（改完即时生效）：
+## 可选：某类危险命令也不想确认
 
 ```bash
-echo '^\s*git\s+restore\b' >> ~/.claude/hooks/allowlist.txt
+echo '^\s*git\s+restore' >> ~/.claude/hooks/allowlist.txt
 ```
 
-毁灭级命令（`rm -rf /`、`mkfs`、`dd` 写盘）**不能**被白名单放行。
+毁灭级（`rm -rf /`、`mkfs`、`dd` 写盘）不能白名单放行。
+
+提示音默认较轻；要再调小/调大，改 `~/.claude/hooks/danger-guard.py` 或 `~/.codex/hooks/danger-guard-codex.py` 里的 `SOUND_VOLUME`（0~1）。
 
 ---
 
 ## 卸载
 
-- **Claude Code**：删掉 `~/.claude/settings.json` 里指向 `danger-guard.py` 的 hooks 配置  
-- **Codex**：删掉 `~/.codex/hooks.json` 里相关条目，以及 `~/.codex/rules/danger-guard.rules`
+- Claude：删掉 `~/.claude/settings.json` 里指向 `danger-guard.py` 的 hooks
+- Codex：删掉 `~/.codex/hooks.json` 相关条目，以及 `~/.codex/rules/danger-guard.rules`
 
 ## 许可
 
