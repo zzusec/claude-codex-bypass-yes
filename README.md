@@ -37,7 +37,7 @@ bash install.sh
 2. 往 `~/.claude/settings.json` **安全合并** `PreToolUse` hook 配置(先备份、保留你已有内容、不动任何密钥);
 3. 询问是否把默认权限模式设为 `bypassPermissions`(消除 `.` source/eval 类内建弹窗,见下方说明;默认否)。
 
-> 想在新机器一步到位、不逐个确认,直接:`bash install.sh --bypass`——装钩子并顺带设好 `bypassPermissions`(含处理 `settings.local.json` 的优先级)。加 `--no-bypass` 则明确只装钩子。
+> 想在新机器一步到位、不逐个确认,直接:`bash install.sh --bypass`——装钩子、设好 `bypassPermissions`(含处理 `settings.local.json` 的优先级)、并写入**推荐 slim deny**(只硬拦毁灭级删除/磁盘;自动剔除 `Bash(sudo *)` 这类过宽规则)。加 `--no-bypass` 则明确只装钩子。
 > 注意:`bypassPermissions` 只能写到你**本机**的 `~/.claude/settings.json`(用户级)才生效;提交进 git 仓库的项目级 `.claude/settings.json` 若设这个模式会被 Claude Code **故意忽略**(防恶意仓库 clone 即提权),所以“clone 即自动 bypass”做不到,得靠这个安装脚本。
 
 <details>
@@ -165,6 +165,43 @@ codex execpolicy check --rules ~/.codex/rules/danger-guard.rules --pretty -- git
 ---
 
 ## 通用配置
+
+### 推荐权限:项目内最大权限,只拦毁灭级删除
+
+目标体验:**日常构建/测试/sudo/运维自动放行**;`rm -rf` 非根/家目录等危险命令由守卫**响铃确认**;删根目录/家目录、格式化磁盘**直接拒绝**。
+
+`bash install.sh --bypass` 会自动写入这套配置。也可手动把下面放进 `~/.claude/settings.json`(若有 `settings.local.json`,它的 `defaultMode`/`deny` 优先级更高,需一并检查):
+
+```json
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~*)",
+      "Bash(rm -rf /Users/*)",
+      "Bash(mkfs *)",
+      "Bash(dd if=* of=/dev/*)"
+    ]
+  },
+  "skipDangerousModePermissionPrompt": true
+}
+```
+
+| 层 | 拦什么 | 不拦什么 |
+|---|---|---|
+| **settings `deny`** | 仅毁灭级:删 `/`/`~`/`/Users/*`、`mkfs`、`dd` 写盘 | `sudo`、普通 `rm`、项目内清理 |
+| **danger-guard hook** | 危险 → 响铃确认;毁灭级 → 拒绝 | `ls`/`git status`/`npm run`/`sudo apt` 等 |
+
+**切勿**在 `deny` 里写过宽规则,否则“最大权限”会失效:
+
+| 错误示例 | 后果 |
+|---|---|
+| `Bash(sudo *)` | 所有 sudo 全拦,装包/服务重启全挂 |
+| `Bash(git push -f *)` 等写进 **deny** | 变成硬拒绝,无法“确认后执行”;这类应留给守卫 `ask` 或白名单 |
+| `Bash(*)` | 等于禁用 Bash |
+
+分工原则:**硬 `deny` 只留给不可逆毁灭**;可商量的危险(force push、`git reset --hard`、`rm -rf /tmp/x`)交给守卫确认或白名单放行。完整示例见仓库 `settings.example.json`。
 
 ### 永久放行(白名单)
 

@@ -89,28 +89,68 @@ if [ "$BYPASS_MODE" = "yes" ]; then
 import json, os, sys
 user_path, local_path = sys.argv[1], sys.argv[2]
 
+# 推荐:项目内最大权限,只硬拦毁灭级删除/磁盘。
+# 其余危险(rm -rf 非根/家、git reset --hard、curl|bash 等)交给 danger-guard 响铃确认。
+# 切勿写 Bash(sudo *) / Bash(git *) 这类过宽 deny,否则日常运维会被误拦。
+RECOMMENDED_DENY = [
+    "Bash(rm -rf /*)",
+    "Bash(rm -rf ~*)",
+    "Bash(rm -rf /Users/*)",
+    "Bash(mkfs *)",
+    "Bash(dd if=* of=/dev/*)",
+]
+# 已知会误拦大量正常命令的过宽规则,装 bypass 时自动剔除
+OVERBROAD_DENY = {
+    "Bash(sudo *)",
+    "Bash(sudo*)",
+    "Bash(*)",
+}
+
 def load(p):
     if os.path.exists(p):
         with open(p, encoding="utf-8") as f:
             return json.load(f)
     return None
 
-# 用户级 ~/.claude/settings.json:设 bypass + 免开机“确认危险模式”框
+def slim_deny(perm):
+    """合并推荐毁灭级 deny,并去掉已知过宽条目;保留用户其它自定义 deny。"""
+    old = list(perm.get("deny") or [])
+    kept = [x for x in old if x not in OVERBROAD_DENY]
+    removed = [x for x in old if x in OVERBROAD_DENY]
+    for x in RECOMMENDED_DENY:
+        if x not in kept:
+            kept.append(x)
+    perm["deny"] = kept
+    return removed, kept
+
+# 用户级 ~/.claude/settings.json:设 bypass + 免开机“确认危险模式”框 + 推荐 slim deny
 u = load(user_path) or {}
-u.setdefault("permissions", {})["defaultMode"] = "bypassPermissions"
+perm_u = u.setdefault("permissions", {})
+perm_u["defaultMode"] = "bypassPermissions"
 u["skipDangerousModePermissionPrompt"] = True
+removed_u, deny_u = slim_deny(perm_u)
 with open(user_path, "w", encoding="utf-8") as f:
     json.dump(u, f, ensure_ascii=False, indent=2)
 print("      已设置", user_path, "-> defaultMode=bypassPermissions")
+print("      推荐 deny:", deny_u)
+if removed_u:
+    print("      已移除过宽 deny:", removed_u)
 
-# 本地级 settings.local.json:仅当它已定义 defaultMode 时同步(其优先级高于用户级,
-# 不改会把用户级覆盖掉);不存在或未定义则不动,避免无中生有创建文件。
+# 本地级 settings.local.json:若存在则同步 defaultMode + slim deny
+# (其 defaultMode/deny 优先级可高于用户级;不存在则不无中生有创建文件)
+# 本地级 settings.local.json:若已存在则同步 defaultMode + slim deny
+# (其 defaultMode/deny 优先级可高于用户级;不存在则不无中生有创建文件)
 l = load(local_path)
-if isinstance(l, dict) and isinstance(l.get("permissions"), dict) and "defaultMode" in l["permissions"]:
-    l["permissions"]["defaultMode"] = "bypassPermissions"
+if isinstance(l, dict):
+    perm_l = l.setdefault("permissions", {})
+    perm_l["defaultMode"] = "bypassPermissions"
+    removed_l, deny_l = slim_deny(perm_l)
     with open(local_path, "w", encoding="utf-8") as f:
         json.dump(l, f, ensure_ascii=False, indent=2)
-    print("      已同步", local_path, "(其 defaultMode 优先级更高)")
+    print("      已同步", local_path, "-> defaultMode=bypassPermissions")
+    print("      local deny:", deny_l)
+    if removed_l:
+        print("      已移除 local 过宽 deny:", removed_l)
 PY
 else
   echo "      已跳过(保持现有权限模式)。"

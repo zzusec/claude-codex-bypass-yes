@@ -1,4 +1,15 @@
 {
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~*)",
+      "Bash(rm -rf /Users/*)",
+      "Bash(mkfs *)",
+      "Bash(dd if=* of=/dev/*)"
+    ]
+  },
+  "skipDangerousModePermissionPrompt": true,
   "hooks": {
     "PreToolUse": [
       {
