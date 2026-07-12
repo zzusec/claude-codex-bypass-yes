@@ -4,11 +4,13 @@
 Codex CLI 命令守卫 (PreToolUse + PermissionRequest Hook)
 ==========================================================
 danger-guard.py 的 Codex 版。判定逻辑(正则引擎、白名单、rm 分级)与 Claude 版完全一致,
-差异只在决策通道:Codex 的 PreToolUse hook 不支持 "ask",所以「危险 → 弹确认」由三层配合完成:
+差异只在决策通道:Codex PreToolUse 对决策几乎是「只认 deny」——
+  输出 permissionDecision:allow / ask 会被当成 unsupported 报错(Codex ≥0.144 实测)。
+  所以「危险 → 弹确认」由三层配合完成:
 
-  - 核武器级(不可逆毁灭) → PreToolUse 响铃 + 直接拒绝(deny)
-  - 命中白名单 / 安全      → PreToolUse 直接放行(allow),不弹框不响铃
-  - 危险(可能合理)        → PreToolUse 响铃 + 不干预,交给 rules 的 prompt 档
+  - 核武器级(不可逆毁灭) → PreToolUse 响铃 + 输出 deny(+reason)
+  - 命中白名单 / 安全      → PreToolUse 静默(无输出)=放行,不弹框不响铃
+  - 危险(可能合理)        → PreToolUse 响铃 + 无输出,交给 rules 的 prompt 档
                             或沙箱提权流程弹出原生确认框
   - PermissionRequest 事件 → 安全命令的提权请求自动点「允许」(bypass yes),
                             危险命令保持沉默让确认框弹出,毁灭级直接拒绝
@@ -244,13 +246,16 @@ def main():
         return
 
     # PreToolUse
+    # Codex 只支持 permissionDecision:deny(+非空 reason);allow/ask 会报
+    # "unsupported permissionDecision:..." 并记为 hook failed。
+    # 放行方式:exit 0 且不输出决策 JSON(静默=继续执行)。
     if level == "block":
         play_sound()
         out_pretooluse("deny", reason)
     elif level in ("allowlist", "safe"):
-        out_pretooluse("allow", reason)
+        return  # 静默放行
     else:
-        # warn:Codex hook 不支持 ask → 响铃提醒,不输出决策,
+        # warn:不支持 ask → 响铃提醒,不输出决策,
         # 交给 rules 的 prompt 档或沙箱提权流程弹原生确认框
         play_sound()
 

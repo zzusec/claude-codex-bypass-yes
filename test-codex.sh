@@ -9,7 +9,7 @@ pass=0; fail=0
 
 json_str() { "$PY" -c 'import sys,json;print(json.dumps(sys.argv[1]))' "$1"; }
 
-# decision_of <event> <command> -> PreToolUse: allow/deny/none;PermissionRequest: allow/deny/none
+# decision_of <event> <command> -> PreToolUse: deny/none;PermissionRequest: allow/deny/none
 decision_of() {
   local event="$1" out
   out=$(printf '%s' "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":$(json_str "$2")}}" | "$PY" "$GUARD" "$event" 2>/dev/null)
@@ -32,18 +32,18 @@ check() { # check <event> <expected> <command>
   fi
 }
 
-echo "== PreToolUse 误报场景:应 allow(危险词只是数据)=="
-check PreToolUse allow 'git commit -m "remove unlink and reboot logic"'
-check PreToolUse allow 'mysql -e "DELETE FROM users WHERE id=1"'
-check PreToolUse allow 'sudo systemctl restart nginx'
-check PreToolUse allow 'echo "we should reboot the server" > notes.txt'
-check PreToolUse allow 'kill -9 12345'
-check PreToolUse allow 'rmdir build'
-check PreToolUse allow 'chmod -R 755 ./dist'
-check PreToolUse allow 'git branch -D feature/x'
-check PreToolUse allow 'grep -rn "shutdown" .'
-check PreToolUse allow 'rm file.txt'
-check PreToolUse allow 'rm -r build'
+echo "== PreToolUse 误报/安全:应 none(静默放行;Codex 不支持 permissionDecision:allow)=="
+check PreToolUse none 'git commit -m "remove unlink and reboot logic"'
+check PreToolUse none 'mysql -e "DELETE FROM users WHERE id=1"'
+check PreToolUse none 'sudo systemctl restart nginx'
+check PreToolUse none 'echo "we should reboot the server" > notes.txt'
+check PreToolUse none 'kill -9 12345'
+check PreToolUse none 'rmdir build'
+check PreToolUse none 'chmod -R 755 ./dist'
+check PreToolUse none 'git branch -D feature/x'
+check PreToolUse none 'grep -rn "shutdown" .'
+check PreToolUse none 'rm file.txt'
+check PreToolUse none 'rm -r build'
 
 echo "== PreToolUse 危险:应 none(沉默响铃,交给 rules prompt / 沙箱确认)=="
 check PreToolUse none 'rm -rf /tmp/foo'
