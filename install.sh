@@ -32,7 +32,7 @@ cp "${SCRIPT_SRC}" "${SCRIPT_DST}"
 SOUND_SRC="$(cd "$(dirname "$0")" && pwd)/chime.wav"
 if [ -f "${SOUND_SRC}" ]; then
   cp "${SOUND_SRC}" "${HOOKS_DIR}/chime.wav"
-  echo "      已复制 chime.wav(经典 QQ 系统消息咳嗽声)"
+  echo "      已复制 chime.wav(经典 QQ 消息滴滴声)"
 else
   echo "      警告: 仓库内缺少 chime.wav,危险命令将静音"
 fi
