@@ -25,9 +25,17 @@ for arg in "$@"; do
   esac
 done
 
-echo "[1/4] 复制脚本 -> ${SCRIPT_DST}"
+echo "[1/4] 复制脚本与铃声 -> ${HOOKS_DIR}"
 mkdir -p "${HOOKS_DIR}"
 cp "${SCRIPT_SRC}" "${SCRIPT_DST}"
+# 提示音与脚本同目录(danger-guard.py 按自身路径定位 chime.wav)
+SOUND_SRC="$(cd "$(dirname "$0")" && pwd)/chime.wav"
+if [ -f "${SOUND_SRC}" ]; then
+  cp "${SOUND_SRC}" "${HOOKS_DIR}/chime.wav"
+  echo "      已复制 chime.wav(经典 QQ 系统消息咳嗽声)"
+else
+  echo "      警告: 仓库内缺少 chime.wav,危险命令将静音"
+fi
 
 echo "[2/4] 合并 PreToolUse hook -> ${SETTINGS}"
 /usr/bin/python3 - "$SETTINGS" "$SCRIPT_DST" <<'PY'

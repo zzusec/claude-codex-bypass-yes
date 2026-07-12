@@ -227,7 +227,7 @@ echo '^\s*git\s+restore\b' >> ~/.claude/hooks/allowlist.txt
 
 编辑 `~/.claude/hooks/danger-guard.py` / `~/.codex/hooks/danger-guard-codex.py` 顶部:
 
-- `SOUND_FILE` — 提示音,可换成 `/System/Library/Sounds/` 下的 `Sosumi` / `Funk` / `Glass` / `Hero` 等;
+- `SOUND_FILE` — 提示音(默认 `chime.wav`=经典 **QQ 系统消息咳嗽声**);可换成任意 wav/aiff,或 `/System/Library/Sounds/` 下的 `Sosumi` / `Funk` / `Glass` / `Hero` 等;
 - `WARN_PATTERNS` — 命中 → 响铃 + 弹确认;
 - `BLOCK_PATTERNS` — 命中 → 响铃 + 直接拒绝。
 
