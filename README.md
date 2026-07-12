@@ -90,7 +90,7 @@ bash install-codex.sh
 ## 可选：某类危险命令也不想确认
 
 ```bash
-echo '^\s*git\s+restore' >> ~/.claude/hooks/allowlist.txt
+echo '^\s*git\s+restore\b' >> ~/.claude/hooks/allowlist.txt
 ```
 
 毁灭级（`rm -rf /`、`mkfs`、`dd` 写盘）不能白名单放行。
