@@ -91,8 +91,68 @@ echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/x"}}' \
 > 实测在 auto 模式 + `skipAutoPermissionPrompt: true` 下,`ask` 确认框正常弹出。
 > 万一你的环境"响了铃却没弹确认",把 `danger-guard.py` 里危险档的 `"ask"` 改成 `"deny"` 即可——一样响铃,且一定拦得住。
 
-> **本钩子管不到的一类弹窗(重要):** Claude Code 自带一层**静态安全检查**,对"会把参数当 shell 代码执行"的命令——`.` / `source` / `eval` / `bash -c` 等——因无法静态分析而强制弹确认(提示形如 `'.' evaluates arguments as shell code`)。这层内建 `ask` 会**覆盖本钩子返回的 `allow` 和 `Bash(*)` 白名单**,所以钩子层无法消除它。典型触发:`. "$HOME/.cargo/env" && npm run fmt:rust`。
-> 要让这类命令也免弹窗,只能靠**权限模式**:把 `~/.claude/settings.json` 的 `permissions.defaultMode` 设为 `"bypassPermissions"`(并加 `"skipDangerousModePermissionPrompt": true` 免掉开机那次"确认危险模式"框)。bypass 下除 `rm` 危险操作外内建检查全部自动放行,而本钩子的 `deny` 档 + 你的 `deny` 列表仍会拦下真正危险的命令,安全网不丢。若有 `settings.local.json`,它的 `defaultMode` 优先级更高,需一并改。
+### 钩子管不到的弹窗(`.` / `source` / `eval`)
+
+弹窗原因若类似下面这句:
+
+```text
+'.' evaluates arguments as shell code
+```
+
+**不是** danger-guard 拦的,也**不是**白名单能放行的。
+
+| 是什么 | 不是什么 |
+|---|---|
+| Claude Code **内建**静态安全检查 | 不是 hook / allowlist 能压掉的 |
+| 触发命令:`.` / `source` / `eval` / `bash -c` 等 | 加 `Bash(*)` 白名单也没用 |
+
+**怎么消掉:** 只能把权限模式改成 `bypassPermissions`。
+
+#### 方法一:一条命令(推荐)
+
+```bash
+cd claude-codex-bypass-yes
+bash install.sh --bypass
+```
+
+装钩子的同时,会把本机 `~/.claude/settings.json` 设为 `bypassPermissions`,并写上推荐的 slim deny。若本机已有 `settings.local.json`,也会一并同步。
+
+#### 方法二:手工改配置
+
+编辑 **`~/.claude/settings.json`**(用户级,本机配置,不要提交进 git 仓库):
+
+```json
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~*)",
+      "Bash(rm -rf /Users/*)",
+      "Bash(mkfs *)",
+      "Bash(dd if=* of=/dev/*)"
+    ]
+  },
+  "skipDangerousModePermissionPrompt": true
+}
+```
+
+改完后**新开会话 / 重启 Claude Code** 才生效。
+
+#### 改完还在弹?先看这两个文件
+
+| 文件 | 作用 |
+|---|---|
+| `~/.claude/settings.json` | **主开关**。日常改这个 |
+| `~/.claude/settings.local.json` | 本机覆盖项。若存在且写了别的 `defaultMode`,可能把上面盖掉 |
+
+常见踩坑:
+
+1. 只改了 `settings.local.json` 成 `bypassPermissions`,但 `settings.json` 仍是 `"auto"` → **还是会弹**。两个文件都要是 `bypassPermissions`,或至少保证生效的那份是 bypass。
+2. 改完没重启 / 没新开会话 → 旧模式还在用。
+3. 把 `bypassPermissions` 写进**项目仓库**的 `.claude/settings.json` → Claude Code 会**故意忽略**(防恶意仓库 clone 即提权)。只能写用户级本机配置。
+
+bypass 之后:`.` / `source` / `eval` 不再弹内建框;真正危险的命令仍由 **danger-guard 响铃确认** + 上面那几条 **毁灭级 deny** 兜底,安全网不丢。
 
 ---
 
@@ -170,7 +230,9 @@ codex execpolicy check --rules ~/.codex/rules/danger-guard.rules --pretty -- git
 
 目标体验:**日常构建/测试/sudo/运维自动放行**;`rm -rf` 非根/家目录等危险命令由守卫**响铃确认**;删根目录/家目录、格式化磁盘**直接拒绝**。
 
-`bash install.sh --bypass` 会自动写入这套配置。也可手动把下面放进 `~/.claude/settings.json`(若有 `settings.local.json`,它的 `defaultMode`/`deny` 优先级更高,需一并检查):
+`bash install.sh --bypass` 会自动写入这套配置。也可手动把下面放进 **`~/.claude/settings.json`**。
+
+> **先改哪个文件?** 主开关是 `~/.claude/settings.json`。若本机还有 `~/.claude/settings.local.json`,它的 `defaultMode` / `deny` 可能覆盖用户级配置——两个文件都检查一下,别只改一边(只改 local 而 user 仍是 `auto`,内建 `.` / `source` 弹窗还会继续出)。项目仓库里的 `.claude/settings.json` 写 `bypassPermissions` 无效,Claude Code 会忽略。
 
 ```json
 {
