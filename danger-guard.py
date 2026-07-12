@@ -33,7 +33,7 @@ import subprocess
 # ============================================================
 
 SOUND_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chime.wav")
-SOUND_VOLUME = "0.25"  # afplay 音量(0~1),越小越轻
+SOUND_VOLUME = "0.5"  # afplay 相对系统音量的比例(0~1); 0.5=一半
 
 # 系统关键目录(chmod/chown 等仅当作用于这些目录时才视为危险)
 _SYS = r"(?:/(?:etc|usr|bin|sbin|var|lib|lib64|boot|opt|root|System|Library|Applications)\b|\s/\s|\s/$|\s/\*)"

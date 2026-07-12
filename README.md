@@ -95,7 +95,7 @@ echo '^\s*git\s+restore' >> ~/.claude/hooks/allowlist.txt
 
 毁灭级（`rm -rf /`、`mkfs`、`dd` 写盘）不能白名单放行。
 
-提示音默认较轻；要再调小/调大，改 `~/.claude/hooks/danger-guard.py` 或 `~/.codex/hooks/danger-guard-codex.py` 里的 `SOUND_VOLUME`（0~1）。
+提示音默认是系统音量的一半（`SOUND_VOLUME=0.5`）；要再调，改 hooks 脚本里的 `SOUND_VOLUME`（0~1，相对系统音量）。
 
 ---
 
