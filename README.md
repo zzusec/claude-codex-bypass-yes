@@ -28,6 +28,10 @@ bash install.sh --bypass
 ### 验证
 
 ```bash
+# 安全命令：应无输出（静默=放行；勿输出 allow，auto 模式会报 unsupported）
+echo '{"tool_name":"Bash","tool_input":{"command":"ls"}}' \
+  | /usr/bin/python3 ~/.claude/hooks/danger-guard.py
+
 # 危险命令：应响铃，并输出 permissionDecision: "ask"
 echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/x"}}' \
   | /usr/bin/python3 ~/.claude/hooks/danger-guard.py

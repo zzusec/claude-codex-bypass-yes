@@ -29,23 +29,23 @@ check() { # check <expected> <command>
   fi
 }
 
-echo "== 误报场景:应 allow(危险词只是数据)=="
-check allow 'git commit -m "remove unlink and reboot logic"'
-check allow 'mysql -e "DELETE FROM users WHERE id=1"'
-check allow 'sudo -u postgres psql -c "DELETE FROM logs"'
-check allow 'sudo systemctl restart nginx'
-check allow 'sudo apt-get install -y curl'
-check allow 'echo "we should reboot the server" > notes.txt'
-check allow 'kill -9 12345'
-check allow 'killall node'
-check allow 'pkill -f vite'
-check allow 'rmdir build'
-check allow 'unlink ./tmp.sock'
-check allow 'chmod 777 ./build.sh'
-check allow 'chmod -R 755 ./dist'
-check allow 'git branch -D feature/x'
-check allow 'grep -rn "shutdown" .'
-check allow 'node -e "console.log(\"mkfs format disk\")"'
+echo "== 误报场景:应 none/静默放行(危险词只是数据;不输出 allow)=="
+check none 'git commit -m "remove unlink and reboot logic"'
+check none 'mysql -e "DELETE FROM users WHERE id=1"'
+check none 'sudo -u postgres psql -c "DELETE FROM logs"'
+check none 'sudo systemctl restart nginx'
+check none 'sudo apt-get install -y curl'
+check none 'echo "we should reboot the server" > notes.txt'
+check none 'kill -9 12345'
+check none 'killall node'
+check none 'pkill -f vite'
+check none 'rmdir build'
+check none 'unlink ./tmp.sock'
+check none 'chmod 777 ./build.sh'
+check none 'chmod -R 755 ./dist'
+check none 'git branch -D feature/x'
+check none 'grep -rn "shutdown" .'
+check none 'node -e "console.log(\"mkfs format disk\")"'
 check none 'rm file.txt' # 非递归 → 交回 settings 静态 deny(无 deny 规则时自动放行)
 
 echo "== 真危险:应 ask =="

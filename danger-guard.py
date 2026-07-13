@@ -5,10 +5,14 @@ Claude Code 命令守卫 (PreToolUse Hook)
 ========================================
 判定每条 Bash 命令的危险程度:
   - 核武器级(不可逆毁灭) → 响铃 + 直接拒绝(deny)
-  - 命中白名单            → 直接放行(allow),不响铃不确认 —— 见同目录 allowlist.txt
+  - 命中白名单            → 静默放行(无输出),不响铃不确认 —— 见同目录 allowlist.txt
   - 危险(可能合理)        → 响铃 + 弹确认(ask)
   - 命中你的 deny 名单      → 交回(exit 0),让 settings 的静态 deny 按原语义处理
-  - 安全(其余)            → 自动放行(allow)
+  - 安全(其余)            → 静默放行(无输出)
+
+注意: 当前 Claude Code(含 auto 模式)只接受 hook 的 deny/ask;
+      输出 permissionDecision:"allow" 会报 unsupported 并导致 PreToolUse failed。
+      安全路径必须「不打印 JSON」,交给权限模式(auto / bypassPermissions)自行放行。
 
 设计原则:
   1. 只拦「真正的系统级毁灭/高危」命令,其余一律放行,尽量不打断自主流程。
@@ -191,6 +195,11 @@ def classify_rm(text):
 
 
 def decide(decision, reason):
+    # allow 不能写回 permissionDecision:"allow":
+    # Claude Code auto 模式会报 unsupported permissionDecision:allow,
+    # 静默 exit 0 = 不干预,由 defaultMode(auto/bypass) 决定是否执行。
+    if decision == "allow":
+        return
     play_sound(decision)
     output = {
         "hookSpecificOutput": {
