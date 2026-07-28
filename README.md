@@ -61,7 +61,7 @@ bash install.sh --bypass
 
 ## Codex CLI
 
-需要 Codex CLI ≥ 0.142。
+需要 Codex CLI ≥ 0.142（0.142.5 / 0.145.0 实测）。
 
 ### 安装
 
@@ -86,6 +86,35 @@ echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' \
 
 bash test-codex.sh
 ```
+
+上面只验证脚本本身。要确认 **Codex 真的在调用钩子**（未 Trust 时 hooks 会静默不执行，看不出区别），跑一次端到端：
+
+```bash
+codex exec --full-auto "执行命令 mkfs.ext4 --help 并原样报告输出"
+```
+
+macOS 没有 `mkfs`，放行也无害。输出里出现下面两行即已生效：
+
+```
+hook: PreToolUse Blocked
+Command blocked by PreToolUse hook: [命令守卫] mkfs 格式化文件系统
+```
+
+只出现 `hook: PreToolUse` / `Completed` 而命令照跑，说明还没 Trust（临时可加 `--dangerously-bypass-hook-trust`）。也可以查 `~/.codex/config.toml` 的 `[hooks.state]`，两条都应有 `trusted_hash` + `enabled = true`。
+
+### 本守卫不管 MCP 工具弹窗
+
+`hooks.json` 的 matcher 是 `"Bash"`，只拦 shell 命令。MCP 工具调用（如 `Allow the chrome-devtools MCP server to run tool "navigate_page"?`）走 Codex 自带的审批，守卫看不到，别往钩子上查。免弹窗在 `~/.codex/config.toml` 配：
+
+```toml
+[mcp_servers.chrome-devtools]
+default_tools_approval_mode = "approve"   # auto | prompt | writes | approve
+```
+
+- 单个工具粒度：`[mcp_servers.<name>.tools.<tool>] approval_mode = "approve"`；也可用 `enabled_tools` / `disabled_tools` 收窄暴露面。
+- 等效做法：弹窗时按 `3. Always allow`，Codex 会把同样的配置写进 `config.toml`。
+- 改完要**重启 Codex TUI**；弹窗只出现在 TUI，`codex exec`（approval=never）本来就不弹，所以这项改动没法用 exec 验证。
+- 忘了合法取值就故意填错让它报出来：`codex mcp list -c 'mcp_servers.x.default_tools_approval_mode="bogus"'`。
 
 ### 升级
 
