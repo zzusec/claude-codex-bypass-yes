@@ -88,6 +88,13 @@ check PermissionRequest allow 'rm -rf node_modules'
 check PermissionRequest none  'git push --force origin main'
 check PermissionRequest none  "rm -rf $HOME/testproj"    # 整个项目 → 弹原生确认
 check PermissionRequest none  'rm -rf /tmp/*'
+check PermissionRequest allow 'rm -rf /tmp/data2 && cat > /tmp/seed.mjs <<"EOF"
+const ip = `10.0.0.${i}`;
+EOF
+node /tmp/seed.mjs'                                      # heredoc 纯数据正文不影响判定
+check PermissionRequest none 'rm -rf /tmp/data2 && cat > /tmp/x.sh <<EOF
+target=`whoami`
+EOF'                                                     # 定界符无引号 → 保守弹框
 check PermissionRequest deny  'rm -rf /etc'
 check PermissionRequest deny  'dd if=/dev/zero of=/dev/disk2'
 

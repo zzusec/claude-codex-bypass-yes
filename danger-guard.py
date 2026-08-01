@@ -135,6 +135,44 @@ def extract_code(cmd):
     return payloads
 
 
+def strip_heredocs(cmd):
+    """把「定界符带引号」的 heredoc 正文清空(<<'EOF' / <<"EOF")。
+
+    这类正文不做变量/命令替换,也不会被当作命令执行,是纯数据 —— 里面的 JS 模板串反引号、
+    SQL、$(...)、reboot 之类的词都不该影响判定(否则写个 seed 脚本都要弹确认)。
+    不带引号的 <<EOF 正文会被 shell 展开(可能触发命令替换),保持原样继续扫描。
+    """
+    if "<<" not in cmd:
+        return cmd
+    lines = cmd.split("\n")
+    mlines = mask_strings(cmd).split("\n")   # 与原文等长,用来判断 << 是否在引号外
+    if len(mlines) != len(lines):
+        return cmd
+    out = []
+    i = 0
+    while i < len(lines):
+        out.append(lines[i])
+        delims = []
+        bare = False
+        for m in re.finditer(r"<<-?", mlines[i]):
+            dm = re.match(r"\s*(?:'([^']*)'|\"([^\"]*)\")", lines[i][m.end():])
+            if dm:
+                delims.append(dm.group(1) if dm.group(1) is not None else dm.group(2))
+            else:
+                bare = True   # <<EOF / <<< / << 变量:交给原逻辑保守处理
+        i += 1
+        if bare or not delims:
+            continue
+        for delim in delims:      # 多个 heredoc 时正文按顺序排列
+            while i < len(lines) and lines[i].strip() != delim:
+                out.append("")    # 正文清空,保留行数
+                i += 1
+            if i < len(lines):
+                out.append("")    # 结束定界符行
+                i += 1
+    return "\n".join(out)
+
+
 def build_scan_text(cmd):
     """用于危险匹配的文本 = 屏蔽数据后的命令 + 内联代码补扫。"""
     masked = mask_strings(cmd)
@@ -345,11 +383,12 @@ def main():
     if not cmd or not cmd.strip():
         return
 
-    # 用于危险匹配的文本:屏蔽引号内数据 + 补扫内联代码
-    scan = build_scan_text(cmd)
+    # 用于危险匹配的文本:去掉 heredoc 纯数据正文 + 屏蔽引号内数据 + 补扫内联代码
+    core = strip_heredocs(cmd)
+    scan = build_scan_text(core)
 
     cwd = data.get("cwd") or os.getcwd()
-    rm = classify_rm(scan, cmd, cwd)
+    rm = classify_rm(scan, core, cwd)
     if rm == "block":
         decide("deny", "rm 递归删除根目录/家目录/整个用户目录/一级系统目录")
         return

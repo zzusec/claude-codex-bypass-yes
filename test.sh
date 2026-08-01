@@ -81,6 +81,25 @@ check ask 'sudo chown -R root /etc'
 check ask 'shutdown -h now'
 check ask 'npm publish'
 
+echo "== heredoc 正文是纯数据(定界符带引号):不该影响判定 =="
+# JS 模板串的反引号曾让整条命令被判「目标不明」→ 误弹确认
+check none 'rm -rf /tmp/data2 && cat > /tmp/seed.mjs <<"EOF"
+const ip = `10.0.0.${i}`;
+EOF
+node /tmp/seed.mjs'
+check none "cat > /tmp/note.txt <<'EOF'
+we should reboot and rm -rf / here
+EOF"
+# 定界符不带引号 → 正文会被 shell 展开,保守弹确认
+check ask 'rm -rf /tmp/data2 && cat > /tmp/x.sh <<EOF
+target=`whoami`
+EOF'
+# heredoc 之外的真危险仍要拦
+check deny "cat > /tmp/a.txt <<'EOF'
+data
+EOF
+rm -rf /"
+
 echo "== 毁灭级:应 deny =="
 check deny 'rm -rf /'
 check deny 'rm -rf ~'
