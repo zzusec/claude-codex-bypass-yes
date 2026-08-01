@@ -101,6 +101,15 @@ data
 EOF
 rm -rf /"
 
+echo "== 同命令内字面量赋值:展开后按真实路径判 =="
+check none 'D=/tmp/foo; rm -rf $D'
+check none 'FAKE=/private/tmp/x/scratchpad/fakehome; rm -rf $FAKE; mkdir -p $FAKE/.codex'
+check none 'D=/tmp/foo; rm -rf ${D}/sub'
+check none 'export D=/tmp/foo; rm -rf $D'
+check ask  'rm -rf $UNSET_DIR'              # 未知变量仍保守
+check deny "D=$HOME"'; rm -rf $D'           # 展开成家目录 → 照样拦死
+check deny 'D=/etc; rm -rf $D'
+
 echo "== 毁灭级:应 deny =="
 check deny 'rm -rf /'
 check deny 'rm -rf ~'

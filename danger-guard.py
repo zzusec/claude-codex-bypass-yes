@@ -302,19 +302,62 @@ def rm_target_level(path, cwd, home):
     return "ask"  # 系统路径、其他用户、外接卷等,交人确认
 
 
+ASSIGN_RE = re.compile(r"^([A-Za-z_]\w*)=(.*)$", re.S)
+
+
+def expand_vars(text, env):
+    """用同条命令里收集到的字面量赋值展开 $VAR / ${VAR};有未知变量返回 None(交人确认)。"""
+    if "$" not in text:
+        return text
+    unknown = []
+
+    def repl(m):
+        name = m.group(1) or m.group(2)
+        if name in env:
+            return env[name]
+        unknown.append(name)
+        return ""
+
+    out = re.sub(r"\$\{(\w+)\}|\$(\w+)", repl, text)
+    return None if unknown else out
+
+
 def classify_rm_targets(cmd, cwd):
-    """解析原始命令里所有直接执行的 rm -rf 目标,聚合为 block/warn/safe;解析不了一律 warn。"""
+    """解析原始命令里所有直接执行的 rm -rf 目标,聚合为 block/warn/safe;解析不了一律 warn。
+
+    同一条命令里 `DIR=/tmp/x; rm -rf $DIR` 这种字面量赋值会先展开再判定 —— 展开后按真实路径
+    走同一套分级(展开成家目录照样 block),既不误拦临时目录,也不会被变量绕过。
+    """
     if "$(" in cmd or "`" in cmd:
         return "warn"
 
     home = os.path.expanduser("~")
     found = False
     worst = "safe"
+    env = {}
     for segment in shell_segments(cmd):
         try:
             args = shlex.split(segment, posix=True)
         except ValueError:
             return "warn"
+        if not args:
+            continue
+
+        # 前置赋值(含 `export A=b` / `A=b cmd` 形态)记进 env,供后面的 $VAR 展开
+        i = 0
+        if args[0] == "export" and len(args) > 1:
+            i = 1
+        while i < len(args):
+            m = ASSIGN_RE.match(args[i])
+            if not m:
+                break
+            value = expand_vars(m.group(2), env)
+            if value is None:
+                env.pop(m.group(1), None)   # 值里有未知变量 → 该变量此后不可信
+            else:
+                env[m.group(1)] = value
+            i += 1
+        args = args[i:]
         if not args or args[0] != "rm":
             continue
 
@@ -335,6 +378,7 @@ def classify_rm_targets(cmd, cwd):
             if not operands:
                 return "warn"
             for path in operands:
+                path = expand_vars(path, env) or path
                 level = rm_target_level(path, cwd, home)
                 if level == "block":
                     return "block"

@@ -96,6 +96,8 @@ node /tmp/seed.mjs'                                      # heredoc 纯数据正�
 check PermissionRequest none 'rm -rf /tmp/data2 && cat > /tmp/x.sh <<EOF
 target=`whoami`
 EOF'                                                     # 定界符无引号 → 保守弹框
+check PermissionRequest allow 'D=/tmp/foo; rm -rf $D'    # 同命令赋值展开后=普通临时目录
+check PreToolUse       deny  'D=/etc; rm -rf $D'         # 展开成一级系统目录照样拦死
 check PermissionRequest deny  'rm -rf /etc'
 check PermissionRequest deny  'dd if=/dev/zero of=/dev/disk2'
 
