@@ -47,6 +47,10 @@ check PreToolUse none 'chmod -R 755 ./dist'
 check PreToolUse none 'git branch -D feature/x'
 check PreToolUse none 'grep -rn "shutdown" .'
 check PreToolUse none 'rm file.txt'
+check PreToolUse none 'rm -f build.log'
+# 别的命令带 -r,同链路里的 rm 只有 -f:不能拼成"rm -rf"
+check PreToolUse none 'sips -r 90 r1.jpg --out r1rot.jpg && rm -f r1rot.jpg.png'
+check PreToolUse none 'ls / && rm -f a.txt'
 check PreToolUse none 'rm -r build'
 
 echo "== PreToolUse 普通目录/临时目录删除:应 none(静默放行;真正自动点允许在 PermissionRequest)=="

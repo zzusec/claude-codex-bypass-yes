@@ -366,15 +366,31 @@ def classify_rm_targets(cmd, cwd):
     return worst
 
 
+def rm_arg_windows(text):
+    """每个 rm 调用的参数窗口 = `rm` 之后到下一个 shell 分隔符之前的文本。
+
+    -r/-f 必须在 rm 自己的参数里判定:整条命令通扫会把别的命令的选项算到 rm 头上,
+    例如 `sips -r 90 a.jpg && rm -f b.png` 曾被误判成 rm -rf 而弹确认。
+    """
+    out = []
+    for m in re.finditer(r"\brm\b", text):
+        rest = text[m.end():]
+        cut = re.search(r"[;&|\n()]", rest)
+        out.append(rest[:cut.start()] if cut else rest)
+    return out
+
+
 def classify_rm(text, raw_cmd, cwd):
-    if not re.search(r"\brm\b", text):
+    rf_windows = [
+        w for w in rm_arg_windows(text)
+        if (re.search(r"(?:^|\s)-\w*r", w, re.I) or "--recursive" in w)
+        and (re.search(r"(?:^|\s)-\w*f", w, re.I) or "--force" in w)
+    ]
+    if not rf_windows:
         return None
-    has_r = bool(re.search(r"(?:^|\s)-\w*r", text, re.I)) or "--recursive" in text
-    has_f = bool(re.search(r"(?:^|\s)-\w*f", text, re.I)) or "--force" in text
-    if not (has_r and has_f):
-        return None
-    if re.search(r"(?:^|\s)(/|/\*|~|~/|~/\*|\$HOME|\$HOME/|\$HOME/\*|\$\{HOME\})(?:\s|$)", text):
-        return "block"
+    for w in rf_windows:
+        if re.search(r"(?:^|\s)(/|/\*|~|~/|~/\*|\$HOME|\$HOME/|\$HOME/\*|\$\{HOME\})(?:\s|$)", w):
+            return "block"
     return classify_rm_targets(raw_cmd, cwd)
 
 

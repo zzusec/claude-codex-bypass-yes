@@ -51,6 +51,12 @@ check none 'git branch -D feature/x'
 check none 'grep -rn "shutdown" .'
 check none 'node -e "console.log(\"mkfs format disk\")"'
 check none 'rm file.txt' # 非递归 → 交回 settings 静态 deny(无 deny 规则时自动放行)
+check none 'rm -f build.log'
+# 别的命令带 -r,同链路里的 rm 只有 -f:不能拼成"rm -rf"
+check none 'sips -r 90 r1.jpg --out r1rot.jpg && rm -f r1rot.jpg.png && qlmanage -t -s 500 -o . r1rot.jpg'
+check none 'grep -r TODO src && rm -f out.tmp'
+check none 'cp -r src dist && rm -f dist/.DS_Store'
+check none 'ls / && rm -f a.txt'  # 裸 / 只出现在别的命令里,不算 rm 目标
 
 echo "== 普通目录/临时目录删除:应 none(静默放行)=="
 check none 'rm -rf /tmp/foo'
