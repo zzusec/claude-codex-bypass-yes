@@ -186,6 +186,8 @@ def load_user_allow():
 
 
 def play_sound():
+    if os.environ.get("DANGER_GUARD_SILENT"):   # 回归测试批量跑用例时静音
+        return
     try:
         subprocess.Popen(
             ["afplay", "-v", SOUND_VOLUME, SOUND_FILE],

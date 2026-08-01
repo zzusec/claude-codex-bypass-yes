@@ -210,6 +210,8 @@ def play_sound(decision):
     """后台异步播放提示音,不阻塞决策返回。"""
     if decision not in ("deny", "ask"):
         return
+    if os.environ.get("DANGER_GUARD_SILENT"):   # 回归测试批量跑用例时静音
+        return
     try:
         subprocess.Popen(
             ["afplay", "-v", SOUND_VOLUME, SOUND_FILE],

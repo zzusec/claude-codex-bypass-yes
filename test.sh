@@ -2,6 +2,7 @@
 # danger-guard 回归测试:验证「误报放行 / 真危险拦截」。
 # 用法:bash test.sh   (退出码非 0 表示有用例不通过)
 set -u
+export DANGER_GUARD_SILENT=1   # 批量跑用例时不响铃
 
 GUARD="$(cd "$(dirname "$0")" && pwd)/danger-guard.py"
 PY="${PYTHON:-/usr/bin/python3}"
