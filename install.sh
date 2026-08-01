@@ -3,10 +3,14 @@
 # 1) 复制守卫脚本到 ~/.claude/hooks/,并安全合并 PreToolUse hook 到 settings.json；
 # 2) 可选把默认权限模式设为 bypassPermissions,消除 . source/eval 类命令的内建弹窗。
 #
+# 3) 顺带把「上下文到 80% 自动 compact」配上(可用 --no-autocompact 跳过)。
+#
 # 用法:
 #   bash install.sh              # 装钩子;交互时询问是否设 bypass(默认否)
 #   bash install.sh --bypass     # 装钩子并直接设 bypass,不询问(新机一步到位)
 #   bash install.sh --no-bypass  # 装钩子,明确跳过权限模式设置
+#   bash install.sh --autocompact-pct 75   # 自动压缩阈值改 75%(默认 80)
+#   bash install.sh --no-autocompact       # 不动自动压缩配置
 set -euo pipefail
 
 CLAUDE_DIR="${HOME}/.claude"
@@ -18,14 +22,21 @@ SCRIPT_DST="${HOOKS_DIR}/danger-guard.py"
 
 # 解析参数:BYPASS_MODE = ""(未定/交互问) | "yes" | "no"
 BYPASS_MODE=""
+AUTOCOMPACT=1
+AUTOCOMPACT_PCT=80
+prev=""
 for arg in "$@"; do
   case "$arg" in
     --bypass|-y) BYPASS_MODE="yes" ;;
     --no-bypass) BYPASS_MODE="no" ;;
+    --no-autocompact) AUTOCOMPACT=0 ;;
+    --autocompact-pct=*) AUTOCOMPACT_PCT="${arg#*=}" ;;
+    *) [ "$prev" = "--autocompact-pct" ] && AUTOCOMPACT_PCT="$arg" ;;
   esac
+  prev="$arg"
 done
 
-echo "[1/4] 复制脚本与铃声 -> ${HOOKS_DIR}"
+echo "[1/5] 复制脚本与铃声 -> ${HOOKS_DIR}"
 mkdir -p "${HOOKS_DIR}"
 cp "${SCRIPT_SRC}" "${SCRIPT_DST}"
 # 提示音与脚本同目录(danger-guard.py 按自身路径定位 chime.wav)
@@ -37,7 +48,7 @@ else
   echo "      警告: 仓库内缺少 chime.wav,危险命令将静音"
 fi
 
-echo "[2/4] 合并 PreToolUse hook -> ${SETTINGS}"
+echo "[2/5] 合并 PreToolUse hook -> ${SETTINGS}"
 /usr/bin/python3 - "$SETTINGS" "$SCRIPT_DST" <<'PY'
 import json, os, sys
 
@@ -75,7 +86,7 @@ with open(settings_path, "w", encoding="utf-8") as f:
 print("      已写入 PreToolUse hook")
 PY
 
-echo "[3/4] 权限模式(可选:消除 . source / eval 类命令的内建弹窗)"
+echo "[3/5] 权限模式(可选:消除 . source / eval 类命令的内建弹窗)"
 # 说明:Claude Code 自带静态安全检查会对 . / source / eval / bash -c 强制弹确认,
 # 且覆盖本钩子的 allow 与 Bash(*) 白名单,钩子层压不下去。只有 bypassPermissions
 # 模式能免——bypass 下除 rm 危险操作外内建检查全自动放行,而本钩子 deny 档 +
@@ -100,18 +111,36 @@ user_path, local_path = sys.argv[1], sys.argv[2]
 # 推荐:项目内最大权限,只硬拦毁灭级删除/磁盘。
 # 其余危险(rm -rf 非根/家、git reset --hard、curl|bash 等)交给 danger-guard 响铃确认。
 # 切勿写 Bash(sudo *) / Bash(git *) 这类过宽 deny,否则日常运维会被误拦。
+#
+# ⚠ deny 的 * 会跨 / 匹配:"Bash(rm -rf /*)" 不是"只拦根目录",而是拦下所有绝对路径的
+# rm -rf(连 /tmp/xxx、项目内 node_modules 都拦),且 deny 优先级最高、bypassPermissions
+# 也压不住 -> 表现为 "Permission to use Bash ... has been denied"。
+# 所以这里只写精确的毁灭级形态,路径分级判断交给 danger-guard.py(见 test.sh)。
 RECOMMENDED_DENY = [
-    "Bash(rm -rf /*)",
-    "Bash(rm -rf ~*)",
-    "Bash(rm -rf /Users/*)",
+    "Bash(rm -rf /)",
+    "Bash(rm -fr /)",
+    "Bash(rm -rf /Users)",
+    "Bash(rm -rf ~)",
     "Bash(mkfs *)",
     "Bash(dd if=* of=/dev/*)",
 ]
-# 已知会误拦大量正常命令的过宽规则,装 bypass 时自动剔除
+# 已知会误拦大量正常命令的过宽规则,装 bypass 时自动剔除。
+# 这些场景 danger-guard 已按目标分级处理(临时/项目内子目录放行,项目级响铃确认,
+# 根/家/整盘直接拒绝),留在 deny 里只会把 mktemp 清理、常规回滚这类操作一起硬拒,
+# 且 deny 优先级高于一切,连 bypassPermissions 都压不住 -> 表现为 "Permission ... denied"。
 OVERBROAD_DENY = {
     "Bash(sudo *)",
     "Bash(sudo*)",
     "Bash(*)",
+    "Bash(rm -rf *)",
+    "Bash(rm -r *)",
+    "Bash(rm *)",
+    "Bash(rm -rf /*)",      # * 跨 / 匹配 -> 实际拦下所有绝对路径删除
+    "Bash(rm -rf ~*)",      # 同上,拦下家目录内一切删除
+    "Bash(rm -rf /Users/*)",
+    "Bash(git reset --hard *)",
+    "Bash(git clean -f *)",
+    "Bash(git push --force *)",
 }
 
 def load(p):
@@ -164,7 +193,15 @@ else
   echo "      已跳过(保持现有权限模式)。"
 fi
 
-echo "[4/4] 完成 ✅"
+echo "[4/5] 上下文自动压缩阈值"
+if [ "$AUTOCOMPACT" -eq 1 ]; then
+  AUTOCOMPACT_EMBED=1 bash "$(cd "$(dirname "$0")" && pwd)/autocompact.sh" \
+    --claude-only --pct "$AUTOCOMPACT_PCT" | sed 's/^/      /'
+else
+  echo "      已跳过(--no-autocompact)。"
+fi
+
+echo "[5/5] 完成 ✅"
 echo
 echo "请重启 Claude Code,或在会话内输入 /hooks 确认加载(权限模式改动也需重启生效)。"
 echo "验证钩子:"

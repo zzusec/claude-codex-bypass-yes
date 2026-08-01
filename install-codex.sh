@@ -1,8 +1,32 @@
 #!/usr/bin/env bash
 # Codex CLI 命令守卫 — 安装脚本 (macOS)
 # 复制脚本/铃声到 ~/.codex/hooks/,合并 hooks.json,安装 danger-guard.rules,
-# 并检测其他 .rules 文件里会压过 prompt 的 forbidden 冲突条目。
+# 检测其他 .rules 文件里会压过 prompt 的 forbidden 冲突条目,
+# 并把「上下文到 80% 自动 compact」配上。
+#
+# 用法:
+#   bash install-codex.sh                    # 默认阈值 80%
+#   bash install-codex.sh --autocompact-pct 75
+#   bash install-codex.sh --no-autocompact   # 不动自动压缩配置
+#   bash install-codex.sh --codex-window 272000   # config.toml 没写窗口时手动给
 set -euo pipefail
+
+AUTOCOMPACT=1
+AUTOCOMPACT_PCT=80
+CODEX_WINDOW=""
+prev=""
+for arg in "$@"; do
+  case "$arg" in
+    --no-autocompact) AUTOCOMPACT=0 ;;
+    --autocompact-pct=*) AUTOCOMPACT_PCT="${arg#*=}" ;;
+    --codex-window=*) CODEX_WINDOW="${arg#*=}" ;;
+    *)
+      [ "$prev" = "--autocompact-pct" ] && AUTOCOMPACT_PCT="$arg"
+      [ "$prev" = "--codex-window" ] && CODEX_WINDOW="$arg"
+      ;;
+  esac
+  prev="$arg"
+done
 
 CODEX_DIR="${CODEX_HOME:-${HOME}/.codex}"
 HOOKS_DIR="${CODEX_DIR}/hooks"
@@ -11,12 +35,12 @@ HOOKS_JSON="${CODEX_DIR}/hooks.json"
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCRIPT_DST="${HOOKS_DIR}/danger-guard-codex.py"
 
-echo "[1/4] 复制脚本与铃声 -> ${HOOKS_DIR}"
+echo "[1/5] 复制脚本与铃声 -> ${HOOKS_DIR}"
 mkdir -p "${HOOKS_DIR}" "${RULES_DIR}"
 cp "${SRC_DIR}/danger-guard-codex.py" "${SCRIPT_DST}"
 cp "${SRC_DIR}/chime.wav" "${HOOKS_DIR}/chime.wav"
 
-echo "[2/4] 合并 PreToolUse + PermissionRequest hook -> ${HOOKS_JSON}"
+echo "[2/5] 合并 PreToolUse + PermissionRequest hook -> ${HOOKS_JSON}"
 /usr/bin/python3 - "$HOOKS_JSON" "$SCRIPT_DST" <<'PY'
 import json, os, sys
 
@@ -57,10 +81,10 @@ with open(hooks_path, "w", encoding="utf-8") as f:
 print("      已写入 PreToolUse + PermissionRequest hook")
 PY
 
-echo "[3/4] 安装危险确认规则 -> ${RULES_DIR}/danger-guard.rules"
+echo "[3/5] 安装危险确认规则 -> ${RULES_DIR}/danger-guard.rules"
 cp "${SRC_DIR}/danger-guard.rules" "${RULES_DIR}/danger-guard.rules"
 
-echo "[4/4] 检查其他 .rules 文件的 forbidden 冲突(会压过 prompt 弹确认)"
+echo "[4/5] 检查其他 .rules 文件的 forbidden 冲突(会压过 prompt 弹确认)"
 conflict=0
 for f in "${RULES_DIR}"/*.rules; do
   [ "$(basename "$f")" = "danger-guard.rules" ] && continue
@@ -70,7 +94,17 @@ for f in "${RULES_DIR}"/*.rules; do
     grep -nE 'decision="forbidden"' "$f" | grep -E '"rm"|"git"' | sed 's/^/        /'
   fi
 done
-[ "$conflict" -eq 0 ] && echo "      无冲突"
+if [ "$conflict" -eq 0 ]; then echo "      无冲突"; fi
+
+echo "[5/5] 上下文自动压缩阈值"
+if [ "$AUTOCOMPACT" -eq 1 ]; then
+  win_args=()
+  [ -n "$CODEX_WINDOW" ] && win_args=(--codex-window "$CODEX_WINDOW")
+  AUTOCOMPACT_EMBED=1 bash "${SRC_DIR}/autocompact.sh" \
+    --codex-only --pct "$AUTOCOMPACT_PCT" "${win_args[@]+"${win_args[@]}"}" | sed 's/^/      /'
+else
+  echo "      已跳过(--no-autocompact)。"
+fi
 
 echo
 echo "完成 ✅ 请重启 Codex(新会话生效)。"

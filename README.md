@@ -128,6 +128,49 @@ bash install-codex.sh
 
 ---
 
+## 上下文到 80% 自动压缩
+
+上下文用到 80% 就自动 compact，不用等它快撑爆再手忙脚乱敲 `/compact`。两端用的都是官方原生能力，这里只做幂等配置：
+
+| | 落点 | 效果 |
+|---|---|---|
+| Claude Code | `~/.claude/settings.json` → `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` + `autoCompactEnabled` | 阈值 = `min(窗口 × 80%, 窗口 − 13000)` |
+| Codex CLI | `~/.codex/config.toml` → `model_auto_compact_token_limit` | 阈值 = 窗口 × 80%（按 `model_context_window` 换算） |
+
+`install.sh` / `install-codex.sh` 已默认带上（`--no-autocompact` 可跳过，`--autocompact-pct 75` 改阈值）。也可以单独跑：
+
+```bash
+bash autocompact.sh                  # Claude + Codex，80%
+bash autocompact.sh --pct 75         # 改阈值
+bash autocompact.sh --claude-only    # 或 --codex-only
+bash autocompact.sh --verify         # 只看当前生效值
+bash autocompact.sh --uninstall      # 撤销
+```
+
+改完**重启** Claude Code / Codex 生效。自测：`bash test-autocompact.sh`。
+
+Codex 的阈值是绝对 token 数，`config.toml` 里没写 `model_context_window` 时没法换算百分比，脚本会提示跳过，按提示补一个窗口即可：
+
+```bash
+bash autocompact.sh --codex-only --codex-window 272000
+```
+
+> 注意区分：`~/.claude/hooks/context-guard.py` 那种「近 3 天有 N 个超大会话(>8MB)」提示说的是**磁盘上会话文件的体积**，跟当前上下文百分比是两回事，不是本功能没生效。
+
+---
+
+## deny 里的 `*` 会跨 `/`，别写「只拦根目录」的假规则
+
+`permissions.deny` 优先级最高，`bypassPermissions` 也压不住，命中就直接 `Permission to use Bash ... has been denied`。而它的 `*` 是跨 `/` 匹配的：
+
+- `Bash(rm -rf /*)` —— 不是「只拦根目录」，而是拦下**所有绝对路径**的 `rm -rf`，连 `/tmp/xxx`、项目里的 `node_modules` 一起拦
+- `Bash(rm -rf ~*)` / `Bash(rm -rf /Users/*)` 同理，等于家目录下什么都删不了
+- `Bash(rm -rf *)`、`Bash(sudo *)`、`Bash(git reset --hard *)` 这类更是天天误伤
+
+`install.sh --bypass` 会自动把这些过宽条目剔除，只留精确的毁灭级硬闸（`rm -rf /`、`rm -rf ~`、`rm -rf /Users`、`mkfs *`、`dd if=* of=/dev/*`），路径分级交回 danger-guard：临时目录/项目内子目录静默放行，整个项目响铃确认，根/家/整盘直接拒绝。
+
+---
+
 ## 可选：某类危险命令也不想确认
 
 ```bash
