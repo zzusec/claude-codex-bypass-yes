@@ -191,3 +191,7 @@ echo '^\s*git\s+restore\b' >> ~/.claude/hooks/allowlist.txt
 ## 许可
 
 MIT
+
+---
+
+![效果图](assets/iShot_2026-08-04_17.34.59.png)
