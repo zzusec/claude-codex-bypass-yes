@@ -194,4 +194,4 @@ MIT
 
 ## 致谢
 
-感谢 linuxdo 社区的讨论、分享与反馈。
+感谢 [linuxdo](https://linux.do/) 社区的讨论、分享与反馈。
