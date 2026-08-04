@@ -192,6 +192,6 @@ echo '^\s*git\s+restore\b' >> ~/.claude/hooks/allowlist.txt
 
 MIT
 
----
+## 致谢
 
-![效果图](assets/iShot_2026-08-04_17.34.59.png)
+感谢 linuxdo 社区的讨论、分享与反馈。
